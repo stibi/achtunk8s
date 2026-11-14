@@ -34,6 +34,13 @@ import {
   id = "zones/${local.zone_id}/90a49c82400d452a8da5bb91a3d66c6a"
 }
 
+# Web Analytics was switched on in the dashboard first; its site tag from
+# scripts/discover-ids.sh ("Web Analytics sites in the account").
+import {
+  to = cloudflare_web_analytics_site.site
+  id = "${var.cloudflare_account_id}/c6c522a28b424ef28acdadc1d507f1c2"
+}
+
 # --- GitHub -----------------------------------------------------------------------------
 
 import {
