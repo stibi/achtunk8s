@@ -36,6 +36,16 @@ pnpm --dir website run check        # astro check, build, html-validate, link ch
 pnpm --dir website run astro …      # any other astro command (loads the no-AVX2 compiler fallback)
 ```
 
+The achtunk8s.io Cloudflare zone and this GitHub repository are configured with Terraform in
+`infra/` (read `infra/README.md` first). A push to `main` that touches it applies it
+(`.github/workflows/infra.yml`), so infra changes go through a pull request, whose plan is
+posted as a comment, unlike the rest. Never run `terraform apply` yourself.
+
+```bash
+infra/scripts/check.sh              # terraform fmt -check, validate (no credentials or state)
+terraform -chdir=infra fmt -recursive   # auto-fix formatting
+```
+
 Tests need Docker: they start a real Postgres with Testcontainers.
 
 The server image is built from the root `Dockerfile` (`docker build .`). It holds the
@@ -70,7 +80,8 @@ get a change through. If you believe a rule is wrong, stop and say why.
 - **Commits**, when asked for, use Conventional Commits, e.g. `feat(server): …`,
   `fix(macos): …`, `docs: …`. The commit-msg hook enforces this. Work lands directly on
   `main`, with no branches or pull requests. Several agents may push, so
-  `git pull --rebase` before you push.
+  `git pull --rebase` before you push. The exception is `infra/`: a push to `main` applies
+  it, so its changes go through a pull request whose plan is reviewed first.
 - **Review.** Before calling non-trivial work done, run the `reviewer` subagent on the
   diff and fix what it finds that is real.
 

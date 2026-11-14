@@ -112,7 +112,8 @@ Setup, once:
    needed anywhere. Then <https://achtunk8s.io> serves the site.
 5. **Redirect `www`.** `www.achtunk8s.io` answers with a 301 to `https://achtunk8s.io`,
    keeping the path and the query string. A Cloudflare Redirect Rule does this at the edge,
-   before the Worker; nothing in this repository is involved.
+   before the Worker. It was set up by hand as below and is now managed by Terraform
+   (`infra/README.md`), like the zone's other settings; change it there.
    - DNS → Records → add `AAAA`, name `www`, IPv6 address `100::`, **Proxied**. A Redirect
      Rule only acts on proxied traffic; `100::` is a placeholder origin that is never reached.
    - Rules → Overview → Create rule → Redirect Rule, named "www to apex":
