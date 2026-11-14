@@ -12,8 +12,8 @@ laptop. A setting changed in a dashboard is reverted by the next apply; change i
 
 | Where | Managed here | Not here |
 |---|---|---|
-| Cloudflare | Zone settings: Always Use HTTPS, minimum TLS 1.2, TLS 1.3, HSTS (6 months, subdomains, no preload) | The zone itself (looked up, never created or deleted), the registrar, the nameservers |
-| | DNSSEC | The DS record at the registrar (by hand, once) |
+| Cloudflare | Zone settings: Always Use HTTPS, minimum TLS 1.2, TLS 1.3, HSTS (6 months, subdomains, no preload) | The zone itself (looked up, never created or deleted), the registrar (Cloudflare Registrar; the provider has no resource for its settings: auto-renew and lock are set in the dashboard), the nameservers |
+| | DNSSEC | The DS record: Cloudflare Registrar adds it itself |
 | | DNS: `www` (`AAAA 100::`, proxied), null MX, SPF, DMARC, the optional Search Console TXT | The Worker `achtunk8s-website` and its custom domain `achtunk8s.io` with its DNS record: wrangler (`website/wrangler.jsonc`) |
 | | The `www` → apex redirect rule (301, path and query kept) | |
 | | Web Analytics, automatic setup | |
@@ -101,10 +101,10 @@ formatting with `terraform -chdir=infra fmt -recursive`.
    the IDs filled in and the secrets in place: the push runs the apply.
 8. **Apply.** Merge. The `Infra` workflow applies in the environment `infra`; GitHub
    creates it on that first run, and the apply restricts it to `main`.
-9. **DNSSEC.** If DNSSEC wasn't on before, add the DS record (output `dnssec_ds_record`,
-   or DNS → Settings in the dashboard) at the registrar right away. Until the registrar
-   has it, Cloudflare reports DNSSEC as `pending`, and every plan shows
-   `status: "pending" -> "active"`.
+9. **DNSSEC.** Nothing to do: the domain is registered with Cloudflare Registrar, which
+   adds the DS record itself (CDS/CDNSKEY scanning, one to two days). Until it's
+   published, Cloudflare reports DNSSEC as `pending`, and plans show
+   `status: "pending" -> "active"`. `dig +short DS achtunk8s.io` shows it once it's there.
 10. **Check.** `dig +short MX achtunk8s.io` gives `0 .`; the site's HTML has the
     `cloudflareinsights.com` beacon; the repository shows its description and topics.
 

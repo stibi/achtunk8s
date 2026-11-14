@@ -46,4 +46,6 @@ topics, and a guard against force-pushing `main`.
 - Same-repository pull requests can read the Terraform secrets in their plan job. Only
   people with write access can open those.
 - Some things have no API and stay manual, listed in `infra/README.md`: the repository's
-  social preview image and the DS record at the registrar.
+  social preview image and the registrar's settings (Cloudflare Registrar; the provider
+  has no resource for them). The DS record needs nothing: Cloudflare Registrar publishes
+  it itself.
