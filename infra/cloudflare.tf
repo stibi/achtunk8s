@@ -46,8 +46,8 @@ resource "cloudflare_zone_setting" "hsts" {
   }
 }
 
-# Signs the zone. The DS record (output dnssec_ds_record) is added at the registrar by
-# hand; until then DNSSEC stays pending and resolvers don't validate.
+# Signs the zone. Cloudflare Registrar publishes the DS record itself within a day or two;
+# until then DNSSEC stays pending and resolvers don't validate.
 resource "cloudflare_zone_dnssec" "site" {
   zone_id = local.zone_id
   status  = "active"

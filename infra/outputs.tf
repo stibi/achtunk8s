@@ -4,7 +4,7 @@ output "zone_id" {
 }
 
 output "dnssec_ds_record" {
-  description = "The DS record to add at the registrar, once, after DNSSEC is turned on."
+  description = "The DS record. Cloudflare Registrar publishes it itself; for checking."
   value       = cloudflare_zone_dnssec.site.ds
 }
 
