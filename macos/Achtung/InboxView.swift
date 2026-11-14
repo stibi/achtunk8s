@@ -137,9 +137,15 @@ struct InboxView: View {
             }
         } else if page == .home {
             // Home loads on its own (`HomeView`), not after the inbox's first refresh.
-            HomeView(model: model) { occurrence in
-                revealed = occurrence
-                page = .list(.channel(occurrence.channel))
+            HomeView(
+                model: model, showAlertmanager: { page = .alertmanager(instance: $0) },
+                open: { openFromHome($0) })
+        } else if case .alertmanager(let instance) = page {
+            // So does an Alertmanager's detail, opened from a Home tile.
+            AlertmanagerDetailView(model: model, instance: instance) {
+                openFromHome($0)
+            } back: {
+                page = .home
             }
         } else if let problem = model.problem, model.lastUpdated == nil {
             UnreachableView(problem: problem, baseURL: model.baseURL) {

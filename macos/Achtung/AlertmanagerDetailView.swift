@@ -5,8 +5,9 @@ import SwiftUI
 
 /// What an Alertmanager tile opens on Home: its active alerts grouped by severity, most
 /// severe first, then its silenced and inhibited ones, folded away. They come from the
-/// same read as the tile's counts. Back (or Esc) returns to Home. It reloads every 30
-/// seconds while the app is on screen, and on ⌘R; the list scrolls like any other.
+/// same read as the tile's counts. Back (or Esc), or Home in the sidebar, returns to Home.
+/// It reloads every 30 seconds while the app is on screen, and on ⌘R; the list scrolls
+/// like any other.
 ///
 /// Its header marks the listed alerts read, as a channel's does, and silences alerts:
 /// the selected ones, else every active one ("Silence All"), each with its own exact
@@ -56,7 +57,7 @@ struct AlertmanagerDetailView: View {
                     do {
                         try await Task.sleep(for: Self.refreshInterval)
                     } catch {
-                        return  // Cancelled: back to Home, or the window closed.
+                        return  // Cancelled: the detail was left, or the window closed.
                     }
                 }
             }

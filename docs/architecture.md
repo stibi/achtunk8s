@@ -463,8 +463,9 @@ The identity below is a contract that features build on
   (`InboxModel.shownOccurrences(revealing:)`), and let go when the user opens anything
   else. Home loads on its own, without waiting for the inbox's first refresh. It reloads
   every 30 seconds while the app is on screen, at once when it comes back, and on ⌘R.
-- Clicking an Alertmanager's tile opens its detail in place of the tiles
-  (`AlertmanagerDetailView`, `GET /api/alertmanagers/{instance}/alerts`, from the same
+- Clicking an Alertmanager's tile opens its detail in place of the tiles, as a page of its
+  own without a sidebar row (`InboxPage.alertmanager`), so Home in the sidebar, Back or Esc
+  returns to the tiles (`AlertmanagerDetailView`, `GET /api/alertmanagers/{instance}/alerts`, from the same
   read as its counts): the active alerts grouped by severity, most severe first, each with
   its summary, how long it has fired and a few key labels (`AlertmanagerAlert.keyLabels`,
   the rest in the help), then the silenced and inhibited ones, folded away; "All quiet"

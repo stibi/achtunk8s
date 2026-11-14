@@ -15,6 +15,8 @@ struct HomeView: View {
     private static let spacing: CGFloat = 24
 
     let model: InboxModel
+    /// Shows an Alertmanager's detail (a page of its own, `InboxPage.alertmanager`).
+    let showAlertmanager: (String) -> Void
     /// Shows an occurrence in its channel.
     let open: (Occurrence) -> Void
 
@@ -22,8 +24,6 @@ struct HomeView: View {
     @State private var viewport: CGSize = .zero
     /// The tiles' height, above the sections.
     @State private var tilesHeight: CGFloat = 0
-    /// The Alertmanager whose detail is open in place of the tiles, if any.
-    @State private var shownInstance: String?
     /// Counts the user's reloads, which collapse expanded sections; the automatic refresh
     /// every 30 seconds doesn't, so a list being read isn't snapped shut.
     @State private var collapseRequest = 0
@@ -37,16 +37,6 @@ struct HomeView: View {
     }
 
     var body: some View {
-        if let shownInstance {
-            AlertmanagerDetailView(model: model, instance: shownInstance, open: open) {
-                self.shownInstance = nil
-            }
-        } else {
-            home
-        }
-    }
-
-    private var home: some View {
         content
             .navigationTitle("Home")
             .toolbar(removing: .title)
@@ -136,7 +126,7 @@ struct HomeView: View {
             ) {
                 ForEach(home.alertmanagers) { overview in
                     AlertmanagerTile(overview: overview, open: open) {
-                        shownInstance = overview.instance
+                        showAlertmanager(overview.instance)
                     }
                 }
             }
