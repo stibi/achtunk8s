@@ -126,10 +126,14 @@ fine-grained PAT or your own `$(gh auth token)`: a plan only reads.
 
 ```bash
 cd infra
-scripts/discover-ids.sh               # import IDs and what was set by hand; read-only
-terraform init
-terraform plan -lock=false            # -lock=false: a local plan doesn't hold the state lock
+make ids                              # import IDs and what was set by hand; read-only
+make init
+make plan                             # -lock=false: a local plan doesn't hold the state lock
+make plan-file                        # the same, into a temp file, with the summary on screen
+make target-plan TARGET='cloudflare_dns_record.www github_repository.achtunk8s'
 ```
+
+`make help` lists the targets (`Makefile`). There is no apply target on purpose.
 
 Never apply locally; merging the pull request applies.
 

@@ -42,6 +42,7 @@ The achtunk8s.io Cloudflare zone and this GitHub repository are configured with 
 posted as a comment, unlike the rest. Never run `terraform apply` yourself.
 
 ```bash
+make -C infra help                  # init, plan, plan-file, target-plan TARGET=…, ids, check, fmt (plans need infra/.envrc)
 infra/scripts/check.sh              # terraform fmt -check, validate (no credentials or state)
 terraform -chdir=infra fmt -recursive   # auto-fix formatting
 ```
