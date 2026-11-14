@@ -49,6 +49,13 @@ uses the compiler's WebAssembly build instead (installed once into
 | `src/pages/robots.txt.ts` | `robots.txt`; the sitemap comes from `@astrojs/sitemap` |
 | `src/styles/global.css` | All styles; light and dark follow the system |
 | `wrangler.jsonc` | Cloudflare config: assets only, no Worker code |
+| `public/_headers` | Response headers: Content-Security-Policy and other security headers, a year's cache for `/_astro/*` |
+
+The Content-Security-Policy allows scripts, styles and images from the site itself only
+(plus Cloudflare Web Analytics' beacon), with no `'unsafe-inline'`. So no inline `<script>`,
+`<style>` or `style=""`: Astro is told never to inline its script
+(`assetsInlineLimit: 0` in `astro.config.ts`). Anything loaded from another origin needs
+its own entry in the policy.
 
 The site copies nothing: the app icon, the coffee-break krysa and the screenshots are read
 from where the app keeps them (`macos/Icon/`, `docs/media/`) at build time.
