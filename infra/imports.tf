@@ -25,13 +25,13 @@ import {
 # Fill in from scripts/discover-ids.sh (the AAAA record www.achtunk8s.io).
 import {
   to = cloudflare_dns_record.www
-  id = "${local.zone_id}/REPLACE_WITH_WWW_RECORD_ID"
+  id = "${local.zone_id}/3069b9d5046c62f2da19ca84e51c7a31"
 }
 
 # Fill in from scripts/discover-ids.sh (the zone's http_request_dynamic_redirect ruleset).
 import {
   to = cloudflare_ruleset.redirects
-  id = "zones/${local.zone_id}/REPLACE_WITH_REDIRECT_RULESET_ID"
+  id = "zones/${local.zone_id}/90a49c82400d452a8da5bb91a3d66c6a"
 }
 
 # --- GitHub -----------------------------------------------------------------------------

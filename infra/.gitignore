@@ -2,3 +2,4 @@
 tfplan
 plan.txt
 plan-status.txt
+.terraform-check/
