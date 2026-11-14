@@ -65,6 +65,14 @@ get a change through. If you believe a rule is wrong, stop and say why.
   deployment, if the task doesn't already cover it.
 - **Record decisions.** If a change departs from an ADR, write a new ADR in the same
   change. When you add a tool or command, update this file.
+- **Keep the public face current.** When a change adds a feature or changes how the app
+  works or looks, update in the same change everything public that describes it:
+  `README.md`, the website (`website/`), and the screenshots and clips in `docs/media/`.
+  Retake the shots it changes and add shots for a new feature, both listed in
+  `docs/media/SHOTLIST.md` with their demo-mode steps (`demo-server.py` may need data for
+  them). The README and the site describe what exists today: when a roadmap item ships,
+  move it out of the roadmap. Shots need the macOS app; if you can't capture them, say
+  which ones are stale or missing instead of leaving them silently out of date.
 - **Don't commit, push, create a branch, or open a pull request** unless the user
   explicitly asks for that action. Leave the change uncommitted for review.
 - **Commits**, when asked for, use Conventional Commits, e.g. `feat(server): …`,
