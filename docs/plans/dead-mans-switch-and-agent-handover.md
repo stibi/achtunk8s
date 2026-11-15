@@ -127,6 +127,14 @@ that lives outside that cluster and alerts when expected signals *stop*.
 
 ## 2. "Investigate with agent": hand an alert over to a coding agent
 
+> **Reshaped (2026-11-15)** by [`agent-handover-plugins.md`](agent-handover-plugins.md)
+> and ADR 0022 (proposed): the investigation becomes a plugin, a handler written against
+> a public handover API, instead of a feature built into the server. The pull decision,
+> the guardrails, the herdr flow, the Rex notes and phase 1 below still hold. The
+> `investigations` table and endpoints, the worker holding `/api/events` open, and the
+> agent sending its own result are replaced; that plan's last section lists what
+> changed. Read it first.
+
 ### Problem
 
 Today the macOS client has "Copy for Agent" (`AgentReport.markdown(for:events:now:)`):
