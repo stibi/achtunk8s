@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Stop hook: Claude may not finish while the server has uncommitted changes that fail
-# `pnpm check`, or (on macOS only) macos/ has changes that fail macos/scripts/check.sh.
+# `pnpm check`, the website (or the media and icon it shows) has changes that fail its
+# `pnpm check`, infra/ has changes that fail infra/scripts/check.sh, or (on macOS only)
+# macos/ has changes that fail macos/scripts/check.sh.
 # Exit 2 blocks the stop and hands the failure output back to Claude.
 # After 3 consecutive blocks in a session the stop is allowed, so Claude can explain a
 # problem it can't fix instead of looping. The pre-commit hook and CI still gate it.
@@ -17,6 +19,11 @@ failed=""
 output=""
 if [[ -n "$(git status --porcelain -- server)" ]] && ! output=$(pnpm --dir server run check 2>&1); then
   failed="pnpm check fails in server/"
+elif [[ -n "$(git status --porcelain -- website docs/media macos/Icon)" ]] &&
+  ! output=$(pnpm --dir website run check 2>&1); then
+  failed="pnpm check fails in website/"
+elif [[ -n "$(git status --porcelain -- infra)" ]] && ! output=$(infra/scripts/check.sh 2>&1); then
+  failed="infra/scripts/check.sh fails"
 elif [[ "$(uname -s)" == Darwin && -n "$(git status --porcelain -- macos)" ]] &&
   ! output=$(macos/scripts/check.sh 2>&1); then
   failed="macos/scripts/check.sh fails"

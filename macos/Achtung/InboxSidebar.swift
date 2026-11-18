@@ -1,9 +1,12 @@
 import AchtungDomain
 import SwiftUI
 
-/// What the sidebar selects: Home, or a list of occurrences (Live or a channel).
+/// What the sidebar selects: Home, or a list of occurrences (Live or a channel). An
+/// Alertmanager's detail, opened from a Home tile, is a page of its own without a sidebar
+/// row, so that choosing Home is a change of selection and goes back to the tiles.
 enum InboxPage: Hashable {
     case home
+    case alertmanager(instance: String)
     case list(OccurrenceScope)
 }
 

@@ -26,6 +26,27 @@ pnpm --dir server run dev           # run the server locally (needs DATABASE_URL
 pnpm --dir server run test:mutation # mutation tests (slow; runs nightly in CI)
 ```
 
+The public website (achtunk8s.io) is an Astro static site in `website/`. Pushes to `main`
+that touch it deploy it to Cloudflare (`.github/workflows/website.yml`, after its check). Read
+`website/README.md` before changing it; it is public, so no real hostnames.
+
+```bash
+pnpm --dir website run dev          # dev server on :4321
+pnpm --dir website run check        # astro check, build, html-validate, link check (must pass for website changes)
+pnpm --dir website run astro …      # any other astro command (loads the no-AVX2 compiler fallback)
+```
+
+The achtunk8s.io Cloudflare zone and this GitHub repository are configured with Terraform in
+`infra/` (read `infra/README.md` first). A push to `main` that touches it applies it
+(`.github/workflows/infra.yml`), so infra changes go through a pull request, whose plan is
+posted as a comment, unlike the rest. Never run `terraform apply` yourself.
+
+```bash
+make -C infra help                  # init, plan, plan-file, target-plan TARGET=…, ids, check, fmt (plans need infra/.envrc)
+infra/scripts/check.sh              # terraform fmt -check, validate (no credentials or state)
+terraform -chdir=infra fmt -recursive   # auto-fix formatting
+```
+
 Tests need Docker: they start a real Postgres with Testcontainers.
 
 The server image is built from the root `Dockerfile` (`docker build .`). It holds the
@@ -55,12 +76,21 @@ get a change through. If you believe a rule is wrong, stop and say why.
   deployment, if the task doesn't already cover it.
 - **Record decisions.** If a change departs from an ADR, write a new ADR in the same
   change. When you add a tool or command, update this file.
+- **Keep the public face current.** When a change adds a feature or changes how the app
+  works or looks, update in the same change everything public that describes it:
+  `README.md`, the website (`website/`), and the screenshots and clips in `docs/media/`.
+  Retake the shots it changes and add shots for a new feature, both listed in
+  `docs/media/SHOTLIST.md` with their demo-mode steps (`demo-server.py` may need data for
+  them). The README and the site describe what exists today: when a roadmap item ships,
+  move it out of the roadmap. Shots need the macOS app; if you can't capture them, say
+  which ones are stale or missing instead of leaving them silently out of date.
 - **Don't commit, push, create a branch, or open a pull request** unless the user
   explicitly asks for that action. Leave the change uncommitted for review.
 - **Commits**, when asked for, use Conventional Commits, e.g. `feat(server): …`,
   `fix(macos): …`, `docs: …`. The commit-msg hook enforces this. Work lands directly on
   `main`, with no branches or pull requests. Several agents may push, so
-  `git pull --rebase` before you push.
+  `git pull --rebase` before you push. The exception is `infra/`: a push to `main` applies
+  it, so its changes go through a pull request whose plan is reviewed first.
 - **Review.** Before calling non-trivial work done, run the `reviewer` subagent on the
   diff and fix what it finds that is real.
 

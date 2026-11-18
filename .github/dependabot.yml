@@ -24,3 +24,10 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+  - package-ecosystem: terraform
+    directory: /infra
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope

@@ -14,12 +14,12 @@ struct OccurrenceStream<Row: View>: View {
     @ViewBuilder let row: (Occurrence) -> Row
 
     var body: some View {
-        let newOnes = occurrences.filter { readState.isNew($0) }
-        ForEach(newOnes, content: row)
-        if let seenUntil = readState.seenUntil, !newOnes.isEmpty {
+        let order = readState.newFirst(occurrences)
+        ForEach(order.new, content: row)
+        if let seenUntil = readState.seenUntil, !order.new.isEmpty {
             NewDivider(seenUntil: seenUntil)
         }
-        ForEach(occurrences.filter { !readState.isNew($0) }, content: row)
+        ForEach(order.earlier, content: row)
         if hasOlder {
             ProgressView()
                 .frame(maxWidth: .infinity)

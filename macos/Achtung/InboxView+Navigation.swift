@@ -27,14 +27,20 @@ extension InboxView {
         }
     }
 
+    /// Shows an occurrence in its channel, selected even if its list doesn't hold it: from
+    /// Home, an Alertmanager's detail, a notification or the menu bar.
+    func openFromHome(_ occurrence: Occurrence) {
+        revealed = occurrence
+        page = .list(.channel(occurrence.channel))
+    }
+
     func takeOpenRequest() {
         guard let request = model.openRequest else { return }
         model.openRequest = nil
         query = SearchQuery()  // Going somewhere ends a search.
         switch request {
         case .occurrence(let occurrence):
-            revealed = occurrence
-            page = .list(.channel(occurrence.channel))
+            openFromHome(occurrence)
             selectedID = occurrence.id
         case .list(let scope):
             page = .list(scope)

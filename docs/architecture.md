@@ -289,9 +289,19 @@ The identity below is a contract that features build on
   last looked. Instances with anything unread come first, then the rest, each group by
   name; channels inside an instance follow the same rule (`Instance.sidebar` in
   AchtungDomain holds these rules). Live (`GET /api/occurrences`) is one stream of
-  every channel's occurrences, each as a card with all its details and its instance and
-  channel; clicking a card marks it read, and visiting Live counts as visiting every
-  channel whose newest change it has loaded. Beside the stream, a card shows the last 24
+  every channel's occurrences (`LiveStream`), each as a card (`LiveCard`). A card is
+  collapsed to one line, about as tall as its icon: the header (icon, title, and under it
+  status, severity and age) on the left, and on the right the summary, the start and end times and
+  the instance and channel; the summary truncates first, and on cards narrower than 600
+  points the times give way (the title's tooltip has them). Clicking a collapsed card, or
+  Return or Space on the one ↑ and ↓ moved to, expands it into all its details and marks it
+  read; it is then the list's open alert (`kept` in `ReadState.shown`), so expanding the
+  next one collapses it, and with read alerts hidden it leaves the stream. Clicking the
+  expanded header collapses it. The expanded card holds still on screen while what's
+  above it changes (a card collapsing or leaving, new alerts arriving): the stream scrolls
+  by as much in the same frame, with room added at the top for a moment when it can't
+  scroll that far. Visiting Live counts as visiting every channel whose newest change it
+  has loaded. Beside the stream, a card shows the last 24
   hours as a vertical timeline, now at the top under a "now" line that moves with the
   clock (`LiveTimeline`; positions, bars and clustering are `Timeline` in AchtungDomain):
   a marker where each alert fired (filled) and resolved (hollow), in its severity's
@@ -299,7 +309,7 @@ The identity below is a contract that features build on
   anything of it was firing, open to now while something still fires. Markers closer than
   18 points become one, drawn at its newest marker, with the number of alerts in it. Markers are buttons with
   an accessibility label; hovering shows the details, and clicking scrolls the stream to
-  the card (a cluster's newest) and highlights it. Below 730 points of width the timeline
+  the card (a cluster's newest), expands and highlights it. Below 730 points of width the timeline
   goes away before the cards would get narrower. A channel
   (`GET /api/instances/{instance}/channels/{slug}/occurrences`; the deprecated route by
   name alone is not used) is a list in a fixed-width column (summaries wrap), with a
@@ -468,8 +478,9 @@ The identity below is a contract that features build on
   (`InboxModel.shownOccurrences(revealing:)`), and let go when the user opens anything
   else. Home loads on its own, without waiting for the inbox's first refresh. It reloads
   every 30 seconds while the app is on screen, at once when it comes back, and on ⌘R.
-- Clicking an Alertmanager's tile opens its detail in place of the tiles
-  (`AlertmanagerDetailView`, `GET /api/alertmanagers/{instance}/alerts`, from the same
+- Clicking an Alertmanager's tile opens its detail in place of the tiles, as a page of its
+  own without a sidebar row (`InboxPage.alertmanager`), so Home in the sidebar, Back or Esc
+  returns to the tiles (`AlertmanagerDetailView`, `GET /api/alertmanagers/{instance}/alerts`, from the same
   read as its counts): the active alerts grouped by severity, most severe first, each with
   its summary, how long it has fired and a few key labels (`AlertmanagerAlert.keyLabels`,
   the rest in the help), then the silenced and inhibited ones, folded away; "All quiet"
