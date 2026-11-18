@@ -1,4 +1,4 @@
-import { get } from "node:http";
+import { Agent, get, request } from "node:http";
 import { connect } from "node:net";
 import type { FastifyInstance } from "fastify";
 import { describe, expect, it } from "vitest";
@@ -8,9 +8,11 @@ import { appWithDatabase } from "../app.ts";
 
 // The change stream: Server-Sent Events telling a client what to re-read (ADR 0019).
 
-/** Opens /api/events on a listening app; `next` reads up to the next event or comment. */
+/** Opens /api/events, listening first if need be; `next` reads to the next event or comment. */
 async function openStream(app: FastifyInstance) {
-  const address = await app.listen({ host: "127.0.0.1", port: 0 });
+  const address = app.server.listening
+    ? `http://127.0.0.1:${(app.server.address() as { port: number }).port}`
+    : await app.listen({ host: "127.0.0.1", port: 0 });
   const controller = new AbortController();
   const response = await fetch(`${address}/api/events`, { signal: controller.signal });
   const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
@@ -135,6 +137,22 @@ describe("GET /api/events", () => {
     stream.close();
   });
 
+  it("tells every stream that is open", async () => {
+    const { app, services } = await appWithDatabase();
+    const streams = [await openStream(app), await openStream(app), await openStream(app)];
+    for (const stream of streams) {
+      await stream.next();
+    }
+    streams[0]!.close();
+
+    services.changes.publish("silences");
+
+    for (const stream of streams.slice(1)) {
+      expect(await stream.next()).toBe('event: changed\ndata: {"kind":"silences"}');
+      stream.close();
+    }
+  });
+
   it("keeps an idle stream open with comments", async () => {
     const { app } = await appWithDatabase({ events: { keepaliveMs: 20 } });
     const stream = await openStream(app);
@@ -156,6 +174,25 @@ describe("GET /api/events", () => {
 
     first.close();
     await expect.poll(async () => (await getOnce(`${address}/api/events`)).status).toBe(200);
+  });
+
+  it("doesn't open a stream for HEAD, which would hold a slot nobody reads", async () => {
+    const { app } = await appWithDatabase({ events: { maxStreams: 1 } });
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    // A probe on a kept-alive connection: it has its answer once the headers are in.
+    const agent = new Agent({ keepAlive: true });
+    const head = await new Promise<number>((resolve, reject) => {
+      request(`${address}/api/events`, { method: "HEAD", agent }, (response) => {
+        response.resume();
+        resolve(response.statusCode ?? 0);
+      })
+        .on("error", reject)
+        .end();
+    });
+
+    expect(head).toBe(404);
+    expect((await getOnce(`${address}/api/events`)).status).toBe(200);
+    agent.destroy();
   });
 
   it("ends its streams when the server closes", async () => {

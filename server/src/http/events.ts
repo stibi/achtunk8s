@@ -65,6 +65,9 @@ export function registerEventRoutes(
   api.get(
     "/api/events",
     {
+      // Fastify would answer HEAD with this handler, which never ends a hijacked reply: a
+      // probe on a kept-alive connection would hold a stream that nobody reads.
+      exposeHeadRoute: false,
       schema: {
         tags: ["client"],
         operationId: "streamChanges",
