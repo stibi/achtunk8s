@@ -19,9 +19,13 @@ swift format lint --strict --recursive --parallel Achtung Packages/*/Package.swi
 step swiftlint
 swiftlint lint --strict --quiet
 
+# With the versions in Package.resolved, and without rewriting it. Xcode keeps the app's
+# own pins (Sparkle) in AchtungAPI's Package.resolved; left to resolve, `swift test` drops
+# them and Xcode writes the file again, so a fresh checkout is never clean after a check,
+# and the release workflow refuses to build from a changed tree.
 for package in Packages/*/; do
   step "swift test ($package)"
-  swift test --quiet --package-path "$package"
+  swift test --quiet --only-use-versions-from-resolved-file --package-path "$package"
 done
 
 step "release scripts"
