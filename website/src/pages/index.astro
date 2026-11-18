@@ -218,7 +218,7 @@ const lifecycle = [
           <strong>{site.name} server</strong>
           <span>Node.js, Fastify, PostgreSQL</span>
         </div>
-        <div class="flow-edge"><code>REST API</code><span>change stream soon</span></div>
+        <div class="flow-edge"><code>REST API</code><span>and a change stream</span></div>
         <div class="flow-node">
           <span class="flow-kicker">On your Mac</span>
           <strong>macOS app</strong>
@@ -301,11 +301,13 @@ const lifecycle = [
         <article class="how-card">
           <h3>Notifications on the Mac</h3>
           <p>
-            The app polls every 30 seconds, with or without a window, and notifies about new and resent critical alerts.
-            What arrived while it was closed notifies once when it starts again within a day, and nothing is announced twice.
+            The app keeps a Server-Sent Events stream open, with or without a window, so a new alert shows up and notifies
+            within moments; it polls when the stream is down. It notifies about new and resent critical alerts. What arrived
+            while it was closed notifies once when it starts again within a day, and nothing is announced twice.
           </p>
           <p class="more">
-            <a href={adr("0013", "macos-notifications-and-background-polling")}>ADR 0013: notifications</a>
+            <a href={adr("0013", "macos-notifications-and-background-polling")}>ADR 0013: notifications</a>,
+            <a href={adr("0019", "change-stream")}>ADR 0019: change stream</a>
           </p>
         </article>
 
@@ -326,15 +328,6 @@ const lifecycle = [
       <h2 id="roadmap-title">In progress and next</h2>
       <p class="section-lead">The decisions behind each step are written down as ADRs and plans in the repository.</p>
       <ol class="roadmap">
-        <li class="roadmap-item">
-          <span class="status in-progress">In progress</span>
-          <h3>Live change stream</h3>
-          <p>
-            A Server-Sent Events stream tells the app the moment something changes: a new alert, a silence, a setting.
-            New alerts show up and notify within moments instead of at the next 30-second poll. The stream only says what
-            changed, so a client that misses an event loses nothing.
-          </p>
-        </li>
         <li class="roadmap-item">
           <span class="status planned">Planned</span>
           <h3>Dead man's switch</h3>

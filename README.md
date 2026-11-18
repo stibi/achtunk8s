@@ -13,8 +13,7 @@ A 43-second tour of the macOS app in demo mode, with made-up alerts (`make demo`
 
 > **Status:** early development, used daily by its author. Alertmanager is the only
 > source so far. The server and the macOS app work end to end: ingest, Home, search,
-> silences, notifications. Live updates over Server-Sent Events are being built (see
-> [Roadmap](#roadmap)).
+> silences, notifications, and live updates over Server-Sent Events.
 
 ## Why: chat channels are bad at alerts
 
@@ -68,7 +67,7 @@ Alertmanager ──webhook──▶ server ──▶ PostgreSQL
      └── silences, alerts ──┤  REST API (OpenAPI)
 Grafana IRM ◀── heartbeats ─┤
                             ▼
-                      macOS app (polls every 30 s; SSE in progress)
+          macOS app (change stream over SSE; polls as a fallback)
 ```
 
 - **Server:** TypeScript on Node.js, Fastify, PostgreSQL
@@ -204,8 +203,18 @@ and a label's context menu in an alert's details searches for it
 New, reopened and resent critical alerts (warning too, if you choose) post a macOS
 notification with Mark as Read and Silence on it. More than three at once become one
 summary. Closing the window leaves the app in the menu bar with a count of unread
-critical alerts, and it keeps polling the server
+critical alerts, and it stays connected to the server
 ([ADR 0013](docs/adr/0013-macos-notifications-and-background-polling.md)).
+
+A new alert notifies within a second or two: the app keeps the server's change stream
+open, `GET /api/events`, a Server-Sent Events stream that says *what kind* of thing
+changed (alerts, silences, settings), and re-reads that part at once. The stream carries
+no data, so a client that misses an event loses nothing. While the stream is down, the
+app polls every 30 seconds as before, and every 2 minutes while it's up, for what the
+stream doesn't announce, such as silences set in Alertmanager itself
+([ADR 0019](docs/adr/0019-change-stream.md)). Behind a reverse proxy, give
+`/api/events` no request timeout: a proxy that cuts it still works, but the app
+reconnects and re-reads everything each time.
 
 ![The menu bar item: a bell with the unread critical count, the newest critical alerts, Mark Critical Alerts as Read and Pause Notifications](docs/media/menu-bar.png)
 
@@ -218,11 +227,6 @@ stays with Alertmanager's own receivers.
 
 ## Roadmap
 
-- **Live change stream** (in progress). `GET /api/events`, a Server-Sent Events stream
-  that says *what kind* of thing changed (alerts, silences, settings), so clients re-read
-  at once instead of waiting up to 30 seconds for their next poll. The server side is
-  built and waiting to be merged. The macOS app doesn't use it yet. Polling stays as a
-  slower fallback.
 - **Dead man's switch** (planned). A witness outside the cluster the inbox runs in, which
   alerts when expected heartbeats *stop*: silence otherwise looks like health. The
   inbox would send a deep heartbeat (each Watchdog seen, time of the last ingest) and show

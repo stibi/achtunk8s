@@ -22,7 +22,7 @@ services ──▶ clients ──GET silences, GET alerts (each ≤ 1 per 30 s p
                      ──GET alert_groups (≤ 1 per minute per integration)──────────▶ Grafana IRM API
 ```
 
-Planned parts not built yet: SSE and acknowledgement. When you add one, follow the layer
+Planned parts not built yet: acknowledgement. When you add one, follow the layer
 rules below and update this file.
 
 ## Server layers (`server/src/`)
@@ -123,7 +123,8 @@ The identity below is a contract that features build on
   row per occurrence, with the latest fields reported for it), `events` (append-only
   history), and `ignored_alert_names` (a setting, ADR 0011). Raw payloads
   are not stored. `events.id` is not a safe stream cursor: ids are assigned at insert,
-  so a lower id can commit after a higher one. Solve that when SSE is built.
+  so a lower id can commit after a higher one. The change stream needs none: it replays
+  nothing, and a client re-reads everything when it connects (ADR 0019).
 - Migrations are SQL files in `server/drizzle/`, generated from the schema by
   `pnpm run db:generate` and committed. `pnpm run check` fails when the schema has
   changes without a migration. The server applies pending migrations at startup, under
@@ -223,6 +224,11 @@ The identity below is a contract that features build on
   instance's silences at most every 30 seconds, keeps the last ones when Alertmanager
   can't be read (and logs a warning), and `domain/silence.ts` evaluates the matchers.
   The home view's alerts are read the same way, and a failed read is logged the same way.
+- `GET /api/events` (`src/http/events.ts`) is a Server-Sent Events stream of what changed
+  (ADR 0019): `ready` on connect, then `changed` with `occurrences`, `silences` or
+  `settings`. It carries no data; clients re-read through the routes above. The services
+  publish each change to `services/changes.ts` (`servicesFor` wraps the changing use
+  cases; the reconciler publishes what it resolved), in memory, so one replica only.
 - Errors are `{ "error": "…" }`: 400 for invalid input (including a cursor the server
   never issued), 404 for an unknown channel or occurrence.
 - "New since last visit" is computed by the client from `lastEventAt` and its own read
@@ -379,8 +385,10 @@ The identity below is a contract that features build on
   and of the open channel picks up such changes within about a minute (the server reads
   Alertmanager at most every 30 seconds). Older loaded occurrences show them when they
   next change, or after a relaunch.
-- No push yet: the app refreshes every 30 seconds, with or without a window (`AppModel`,
-  ADR 0013), when a list opens, and whenever it becomes active. A refresh reloads the
+- The app refreshes when the change stream says something changed (ADR 0019, below), and
+  every 30 seconds while the stream is down, about every 2 minutes while it's live, with
+  or without a window (`AppModel`, ADR 0013), when a list opens, and whenever it becomes
+  active. A refresh reloads the
   channels and the all-channels feed, plus the selected channel's list, asking each for
   everything changed since a minute before its newest known `lastEventAt`. The unread
   counts are made from the feed: `GET /api/channels` has no unread information (read state
@@ -537,6 +545,18 @@ The identity below is a contract that features build on
   All as Read on a summary). Its actions and clicks come back to `AppModel`, which uses
   `InboxModel`'s own read and silence paths and opens the window on the alert through
   `InboxModel.openRequest`. Reading an alert removes its delivered notification.
+- The change stream (ADR 0019): `AppModel` keeps the server's `GET /api/events` open
+  (`ChangeStream`). `AchtungServer.followChanges` in AchtungAPI reads it with
+  OpenAPIRuntime's Server-Sent Events decoder and reconnects when it ends, when
+  `ChangeStreamSchedule` in AchtungDomain says: after the server's retry, doubling after
+  repeated failures up to a minute. A stream that said `ready` before it ended is no
+  failure (a gateway's request timeout). Waking or the network coming back reconnects at
+  once. `ready` re-reads everything; changes gathered for 300 ms re-read their part
+  through the usual routes: occurrences and silences the inbox (notifications come out of
+  the same `AlertNotificationState` path), and any change Home and an Alertmanager's
+  detail, through `.alertsChanged` and `.ignoredAlertNamesChanged`. The poll goes on,
+  every 2 minutes while the stream is live, and shares one refresh at a time with the
+  stream.
 - The server address is a setting (Settings window, General tab). The app allows plain
   HTTP (ATS exception in the generated Info.plist): servers are self-hosted and protected
   by the operator's network, not by TLS (ADR 0002).

@@ -4,14 +4,15 @@ import Foundation
 
 extension Notification.Name {
     /// The server's ignored alert names changed. The object is the `IgnoredAlertsModel`
-    /// that saved them; `ignoredAlertNamesServer` says on which server. Home and an
+    /// that saved them, or nil when the change stream said so (ADR 0019); `changedServer`
+    /// says on which server. Home and an
     /// Alertmanager's detail reload at once, and Settings shows a change made elsewhere.
     static let ignoredAlertNamesChanged = Notification.Name("ignoredAlertNamesChanged")
 }
 
 extension Notification {
-    /// The base URL of the server whose ignored alert names changed.
-    var ignoredAlertNamesServer: URL? { userInfo?["baseURL"] as? URL }
+    /// The base URL of the server whose ignored alert names, or silences, changed.
+    var changedServer: URL? { userInfo?["baseURL"] as? URL }
 }
 
 /// The alert names Home leaves out (`IgnoredAlertNames`): one list on the server, for every
