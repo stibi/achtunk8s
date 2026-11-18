@@ -29,6 +29,10 @@ struct InboxSidebar: View {
                 unreadCritical: instances.reduce(0) { $0 + $1.unreadCritical },
                 hasNews: model.channels.contains { model.readState.hasNews($0) }
             )
+            // The list doesn't set the row that is already selected; Live chosen again goes
+            // back to its latest (`InboxView.show`).
+            .contentShape(.rect)
+            .onTapGesture { selection = .list(.allChannels) }
             .tag(InboxPage.list(.allChannels))
             Section("Channels") {
                 ForEach(instances) { instance in

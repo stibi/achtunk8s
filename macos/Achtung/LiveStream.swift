@@ -9,7 +9,9 @@ import SwiftUI
 /// is. With read alerts hidden, the stream holds only new ones and resends, and the
 /// expanded card until another is, so clicking down the stream clears it. The expanded card
 /// holds still on screen while what's above it changes: a card collapsing or leaving, a new
-/// alert arriving. ↑ and ↓ move the keyboard between cards.
+/// alert arriving. ↑ and ↓ move the keyboard between cards. A successful silence from the
+/// expanded card collapses it, as the user is done with it. Esc, or choosing Live again,
+/// goes back to the latest (`showLatest`).
 struct LiveStream: View {
     /// A click on a timeline marker, numbered so that each one counts, even on the same
     /// card.
@@ -37,9 +39,12 @@ struct LiveStream: View {
     /// Collapsed cards show their times (`LiveCard.timesWidth`).
     let showsTimes: Bool
     let timelineClick: TimelineClick?
+    /// Counts requests to go back to the latest (`showLatest`): Live chosen or opened again
+    /// while it's shown.
+    let latestRequest: Int
 
     /// The card a timeline marker was clicked for, highlighted for a moment.
-    @State private var highlighted: Int?
+    @State var highlighted: Int?
     /// Counts clicks, so each one restarts the highlight's two seconds, even on the same
     /// card.
     @State private var highlightRequest = 0
@@ -48,26 +53,29 @@ struct LiveStream: View {
     @State private var revealed: Int?
     @State private var revealRequest = 0
     /// The card ↑ and ↓ moved to; nil after a click, so they go on from the expanded one.
-    @State private var keyboardCard: Int?
+    @State var keyboardCard: Int?
+    /// The stream takes the keyboard when a card opens, also from the timeline, so ↑, ↓
+    /// and Esc work from there.
+    @FocusState private var hasFocus: Bool
     /// Room above the stream for a card that left above the expanded one, when the stream
     /// can't scroll back as far as it was tall: the expanded card opens where it was, then
     /// the room eases away (`moved`).
     @State private var topSlack: CGFloat = 0
-    @State private var position = ScrollPosition()
+    @State var position = ScrollPosition()
     @State private var anchor = ExpandedCardAnchor()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var shown: [Occurrence] {
+    var shown: [Occurrence] {
         readState.shown(own: occurrences, feed: occurrences, in: .allChannels, keeping: kept)
     }
 
     /// The cards as the stream lists them, for ↑ and ↓.
-    private var order: [Int] {
+    var order: [Int] {
         let order = readState.newFirst(shown)
         return (order.new + order.earlier).map(\.id)
     }
 
-    private var animation: Animation? {
+    var animation: Animation? {
         reduceMotion ? nil : .default
     }
 
@@ -85,6 +93,7 @@ struct LiveStream: View {
         .onChange(of: timelineClick) {
             if let timelineClick { show(timelineClick.occurrence) }
         }
+        .onChange(of: latestRequest) { showLatest() }
         // Ends the highlight two seconds after the latest click; a new click restarts it.
         .task(id: highlightRequest) {
             guard highlighted != nil else { return }
@@ -113,10 +122,12 @@ struct LiveStream: View {
             anchor.forget(allBut: ids)
         }
         .focusable()
+        .focused($hasFocus)
         .focusEffectDisabled()
         .onKeyPress(.downArrow) { moveKeyboard(by: 1, with: proxy) }
         .onKeyPress(.upArrow) { moveKeyboard(by: -1, with: proxy) }
         .onKeyPress(keys: [.return, .space]) { _ in toggleKeyboardCard() }
+        .onKeyPress(.escape) { escape() }
         // After the update that put a hidden card back into the stream, so it's there to
         // scroll to; on appearing too, for a click while the stream was all caught up.
         .onChange(of: revealRequest) { scrollToRevealed(with: proxy) }
@@ -145,7 +156,11 @@ struct LiveStream: View {
                     isExpanded: kept == occurrence.id,
                     isHighlighted: highlighted == occurrence.id,
                     hasKeyboardFocus: keyboardCard == occurrence.id,
-                    showsTimes: showsTimes, silence: silence,
+                    showsTimes: showsTimes,
+                    // Silenced, the user is done with it; unless they've opened another.
+                    silence: silence.whenSilenced {
+                        if kept == $0.id { collapseHandingOnKeyboard() }
+                    },
                     expand: {
                         keyboardCard = nil
                         expand(occurrence)
@@ -190,10 +205,11 @@ struct LiveStream: View {
             kept = occurrence.id
             markRead(occurrence)
         }
+        hasFocus = true
     }
 
     /// With read alerts hidden, a read card leaves the stream as it collapses.
-    private func collapse() {
+    func collapse() {
         withAnimation(animation) { kept = nil }
     }
 
@@ -235,7 +251,7 @@ struct LiveStream: View {
     }
 
     /// Expands `occurrence`'s card and scrolls it to the top, after the update.
-    private func reveal(_ occurrence: Occurrence) {
+    func reveal(_ occurrence: Occurrence) {
         // It's scrolled to, so it isn't held where it was.
         anchor.revealing = occurrence.id
         revealed = occurrence.id
@@ -253,41 +269,5 @@ struct LiveStream: View {
             }
             anchor.revealing = nil  // Where it's scrolled to is where it's held from now on.
         }
-    }
-
-    /// Moves the keyboard to the next or previous card, from the expanded one if it hasn't
-    /// moved yet, and scrolls just enough to show it.
-    private func moveKeyboard(by step: Int, with proxy: ScrollViewProxy) -> KeyPress.Result {
-        let order = order
-        guard let last = order.indices.last else { return .ignored }
-        let target =
-            if let current = (keyboardCard ?? kept).flatMap({ order.firstIndex(of: $0) }) {
-                order[min(max(current + step, 0), last)]
-            } else {
-                step > 0 ? order[0] : order[last]
-            }
-        keyboardCard = target
-        withAnimation(animation) { proxy.scrollTo(target) }
-        return .handled
-    }
-
-    /// Return and Space expand the card the keyboard is on, scrolled to the top, or collapse
-    /// it if it's expanded. A card that leaves the stream as it collapses hands the keyboard
-    /// to the next one.
-    private func toggleKeyboardCard() -> KeyPress.Result {
-        let order = order
-        guard let id = keyboardCard ?? kept, let index = order.firstIndex(of: id),
-            let occurrence = shown.first(where: { $0.id == id })
-        else { return .ignored }
-        if kept == id {
-            let rest = order.filter { $0 != id }
-            let leaves = hidesRead && readState.isRead(occurrence)
-            keyboardCard = leaves && !rest.isEmpty ? rest[min(index, rest.count - 1)] : id
-            collapse()
-        } else {
-            keyboardCard = id
-            reveal(occurrence)
-        }
-        return .handled
     }
 }

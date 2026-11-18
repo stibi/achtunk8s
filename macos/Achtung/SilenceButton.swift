@@ -23,6 +23,17 @@ struct SilenceActions {
         self.unsilence = unsilence
     }
 
+    /// These actions, calling `silenced` after each silence that succeeds.
+    func whenSilenced(_ silenced: @escaping @MainActor (Occurrence) -> Void) -> SilenceActions {
+        SilenceActions(
+            silence: { occurrence, duration in
+                let problem = await silence(occurrence, duration)
+                if problem == nil { silenced(occurrence) }
+                return problem
+            },
+            unsilence: unsilence)
+    }
+
     /// For previews: nothing happens.
     static let none = SilenceActions(silence: { _, _ in nil }, unsilence: { _ in .ended })
 }

@@ -19,7 +19,10 @@ struct InboxView: View {
     @State var revealed: Occurrence?
     /// Live's expanded card (`LiveView.kept`), here so it stays expanded when the user
     /// comes back to Live, and so marking all read can let it go.
-    @State private var liveKept: Int?
+    @State var liveKept: Int?
+    /// Counts the times Live was chosen while shown, each a request to go back to the
+    /// latest (`LiveStream.latestRequest`).
+    @State var liveLatestRequest = 0
     /// A channel just opened whose first unread occurrence is still to be selected, after
     /// its first refresh.
     @State var selectFirstUnreadIn: OccurrenceScope?
@@ -209,7 +212,7 @@ struct InboxView: View {
                 loadOlder: { await model.loadOlder(in: .allChannels) },
                 hidesRead: hidesRead(in: .allChannels), kept: $liveKept,
                 markRead: { model.markRead($0) },
-                silence: SilenceActions(model))
+                silence: SilenceActions(model), latestRequest: liveLatestRequest)
         } else {
             loading(.allChannels)
         }
