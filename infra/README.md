@@ -17,10 +17,11 @@ laptop. A setting changed in a dashboard is reverted by the next apply; change i
 | | DNS: `www` (`AAAA 100::`, proxied), null MX, SPF, DMARC, the optional Search Console TXT | The Worker `achtunk8s-website` and its custom domain `achtunk8s.io` with its DNS record: wrangler (`website/wrangler.jsonc`) |
 | | The `www` → apex redirect rule (301, path and query kept) | |
 | | Web Analytics, automatic setup | |
+| | The R2 bucket `achtunk8s-updates` and its public domain `updates.achtunk8s.io` (the macOS client's updates) | The objects in it: the release workflow. The R2 keys it uploads with (below) |
 | GitHub | The repository: description, homepage, topics, features, merge settings, secret scanning and push protection | Actions secrets (values would land in the state; listed below) |
 | | Dependabot alerts and security updates | The social preview image (no API: Settings → General → Social preview) |
 | | The `main` ruleset: no deletion, no force push | |
-| | The environment `infra`, deployable from `main` only | |
+| | The environments `infra` and `release`, deployable from `main` only | The secrets of `release` (below) |
 
 The repository can't be deleted by Terraform: it has `prevent_destroy`, and a destroy
 would archive it instead.
@@ -67,6 +68,7 @@ formatting with `terraform -chdir=infra fmt -recursive`.
    | Zone | DNS | Edit | Records and DNSSEC |
    | Zone | Single Redirect | Edit | The `www` redirect rule |
    | Account | Account Settings | Edit | Web Analytics (the API needs it to create a site) |
+   | Account | Workers R2 Storage | Edit | The updates bucket and its custom domain |
 
    Zone resources: Specific zone → `achtunk8s.io`. Account resources: only this account.
 4. **GitHub token.** Settings → Developer settings → Fine-grained tokens → Generate,
@@ -111,6 +113,37 @@ formatting with `terraform -chdir=infra fmt -recursive`.
 To make every apply wait for an approval, add `reviewers { users = [<your user id>] }` to
 `github_repository_environment.infra` (`gh api user --jq .id`). Not in the dashboard: the
 next apply would remove it.
+
+## App updates
+
+The macOS client updates itself from `https://updates.achtunk8s.io/tip/appcast.xml`
+(ADR 0021). Terraform makes the bucket, the domain and the environment `release`. The
+rest is set by hand, once, because the values are secrets:
+
+1. **Upload keys.** R2 → Manage API tokens → Create Account API token, named
+   "achtunk8s updates upload": permission **Object Read & Write**, applied to the bucket
+   `achtunk8s-updates` only. Not the state token: the release workflow must not be able
+   to read the Terraform state.
+2. **Signing key.** Sparkle's EdDSA key, made with `generate_keys` at a Mac's desktop
+   (it goes to the login Keychain; the steps are in `docs/plans/in-app-updates.md`). The
+   public key goes into `macos/project.yml`. The private key goes into a password manager
+   and into the secret below, and nowhere else. If it is lost, installed copies can't
+   update any more and must be reinstalled by hand.
+3. **Secrets** of the environment `release` (Settings → Environments → release →
+   Environment secrets), not repository secrets, so only a workflow on `main` reads them:
+
+   | Secret | Value |
+   |---|---|
+   | `SPARKLE_ED_PRIVATE_KEY` | The private signing key (2) |
+   | `UPDATES_R2_ACCESS_KEY_ID` | R2 Access Key ID (1) |
+   | `UPDATES_R2_SECRET_ACCESS_KEY` | R2 Secret Access Key (1) |
+
+   `CLOUDFLARE_ACCOUNT_ID` is already a repository secret.
+
+The bucket has `prevent_destroy`, and it has no lifecycle rule on purpose: the release
+workflow deletes the archives that drop out of the appcast, and deleting by age would
+break updates after a quiet month. Don't rename the bucket's domain: the feed URL is
+compiled into every installed copy.
 
 ## Run locally
 

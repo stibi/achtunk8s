@@ -12,3 +12,8 @@ output "web_analytics_site_tag" {
   description = "The Web Analytics site, for the dashboard and a manual beacon if automatic setup can't inject it."
   value       = cloudflare_web_analytics_site.site.site_tag
 }
+
+output "updates_url" {
+  description = "Where the macOS client's appcast and archives are served."
+  value       = "https://${cloudflare_r2_custom_domain.updates.domain}"
+}
