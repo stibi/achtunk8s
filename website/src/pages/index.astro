@@ -372,8 +372,8 @@ const lifecycle = [
     <div class="container">
       <h2 id="self-host-title">Run your own</h2>
       <p class="section-lead">
-        {site.name} is early. There are no published images or app downloads yet, so you build both from the repository.
-        It runs where your alerts are: one container and a Postgres database.
+        {site.name} is early. There is no published server image yet, so you build it from the repository; the Mac app
+        is a download. It runs where your alerts are: one container and a Postgres database.
       </p>
       <ol class="steps">
         <li class="step">
@@ -418,11 +418,17 @@ docker run -p 8080:8080 \
         <li class="step">
           <h3>Install the Mac app</h3>
           <p>
-            Needs macOS 27 and Xcode. Build it into <code>~/Applications</code>, then set the server address in Settings.
-            To look around first, <code>make demo</code> starts it against a fake server with made-up alerts.
+            Needs macOS 27. <a href={site.download}>Download the latest build</a>, unzip it and drag
+            <code>Achtung.app</code> into Applications. It isn't signed with an Apple Developer ID, so macOS refuses the
+            first launch: choose Open Anyway in System Settings → Privacy &amp; Security and enter an administrator
+            password, or clear the download mark in Terminal. Then set the server address in Settings.
           </p>
-          <pre><code>brew install xcodegen
-make install</code></pre>
+          <pre><code>xattr -dr com.apple.quarantine /Applications/Achtung.app</code></pre>
+          <p>
+            From then on the app keeps itself up to date: it checks once a day and asks before it installs. With Xcode you
+            can build it instead (<code>make install</code>), and <code>make demo</code> starts it against a fake server
+            with made-up alerts.
+          </p>
         </li>
       </ol>
       <aside class="callout" aria-label="Security">
@@ -432,7 +438,8 @@ make install</code></pre>
         </p>
       </aside>
       <div class="actions center">
-        <a class="button primary" href={site.repository}>Get the source on GitHub</a>
+        <a class="button primary" href={site.download}>Download the Mac app</a>
+        <a class="button" href={site.repository}>Get the source on GitHub</a>
         <a class="button" href={repositoryFile("docs/architecture.md")}>Read the architecture</a>
       </div>
     </div>

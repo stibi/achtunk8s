@@ -54,6 +54,8 @@ you silence it where it came from.
 - **Readable alerts:** summary and description as prose, links as buttons, every label
   a hover away from copying. **Copy for Agent** (⇧⌘C) puts the whole alert on the
   clipboard as Markdown for an AI agent.
+- **Keeps itself up to date:** the app checks for a new build once a day and installs
+  it when you say so.
 - **Zero setup per channel:** point an Alertmanager receiver at a new URL and the
   channel exists.
 - **Self-hosted, small and open source:** one container, one Postgres, no accounts. MIT
@@ -226,6 +228,18 @@ gets no banner ([ADR 0018](docs/adr/0018-notifications-survive-restarts.md)).
 Notifications need the Mac awake and the app running: they are not a pager, and paging
 stays with Alertmanager's own receivers.
 
+## Updates
+
+![The macOS app with an "Update Available" pill in its toolbar and the popover under it: the new build, the installed one, when it was published, its size, a link to what changed, and Skip, Later and Install and Relaunch](docs/media/update.png)
+
+Every change to the app on `main` that passes its checks is built and published, and
+installed copies find it within a day, or at once with **Check for Updates…** in the
+Achtung menu. A pill in the toolbar says a new build is there; Install and Relaunch is
+the only question, and nothing installs by itself. Each build and the feed that lists
+them are signed with a key that only the release workflow holds, and the app refuses
+anything else as *Update Rejected*. The updater is [Sparkle](https://sparkle-project.org)
+([ADR 0021](docs/adr/0021-in-app-updates.md)).
+
 ## Roadmap
 
 - **Dead man's switch** (planned). A witness outside the cluster the inbox runs in, which
@@ -245,7 +259,8 @@ stays with Alertmanager's own receivers.
 
 ## Quick start
 
-There is no published container image or app build yet: build both from source.
+There is no published container image yet: build the server from source. The macOS app
+is a download.
 
 **Server.** Requirements: a PostgreSQL database and a place to run a container (in
 practice Kubernetes, behind an ingress).
@@ -280,10 +295,30 @@ receivers:
 
 You can add it next to an existing Teams or Slack receiver and compare.
 
-**macOS app.** On a Mac with Xcode, `brew install xcodegen swiftlint periphery`, then
-`macos/scripts/install.sh` builds a Release app into `~/Applications`. Set the server's
-address in Settings. To try the app without a server, `make demo` runs it against a fake
-server with made-up alerts.
+**macOS app.** Needs macOS 27.
+
+1. Download [Achtung-latest.zip](https://updates.achtunk8s.io/tip/Achtung-latest.zip),
+   the latest build of `main`, and unzip it.
+2. Drag `Achtung.app` into Applications in Finder.
+3. Open it. The app isn't signed with an Apple Developer ID, so macOS refuses the first
+   time (*"Achtung" Not Opened*). Either go to System Settings → Privacy & Security,
+   choose **Open Anyway** and enter an administrator password, or clear the download mark
+   in Terminal:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Achtung.app
+   ```
+
+4. Set the server's address in Settings.
+
+From then on the app updates itself (above). If it says *Can't Update from Here*, macOS
+is still running it from a temporary copy: quit it and run the `xattr` command.
+
+To build it yourself instead: on a Mac with Xcode, `brew install xcodegen`, then
+`macos/scripts/install.sh` builds a Release app into `~/Applications`. It updates itself
+like a downloaded one, except from a branch with more commits than `main`, whose build
+number is ahead until `main` passes it. To try the app without a server, `make demo`
+runs it against a fake server with made-up alerts.
 
 ### Security model
 
