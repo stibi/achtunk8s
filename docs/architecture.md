@@ -557,6 +557,32 @@ The identity below is a contract that features build on
   detail, through `.alertsChanged` and `.ignoredAlertNamesChanged`. The poll goes on,
   every 2 minutes while the stream is live, and shares one refresh at a time with the
   stream.
+- In-app updates ([ADR 0021](adr/0021-in-app-updates.md), `Achtung/Updates/`): Sparkle
+  2, pinned exactly in `project.yml`, reads the signed feed at
+  `https://updates.achtunk8s.io/tip/appcast.xml` once a day and on "Check for Updates…"
+  (app menu and menu bar menu), and installs only what the user accepts.
+  `UpdateController`, made by `AchtungApp`, owns the updater, and creates it only when
+  `UpdaterAvailability` (AchtungDomain) is `active`. It is off, and the menu item and
+  Settings say why, in a Debug build or one with build number 0 (Xcode, `run.sh`, demo
+  mode, previews, `check.sh`), in a build without the public key (`SUPublicEDKey`, from
+  `ACHTUNG_UPDATE_PUBLIC_KEY` in `project.yml`), and when macOS runs the
+  app translocated (its bundle path contains `/AppTranslocation/`, a downloaded copy not
+  yet approved in place), where an update couldn't land: then the pill says so at launch,
+  with the fix. `UpdateDriver` is Sparkle's user interface: with the main window on
+  screen as a check begins it reports to `UpdateModel`, else Sparkle's standard dialogs
+  show that check to its end. `UpdateModel` holds the `UpdateState` (idle, checking,
+  available, downloading, extracting, installing, up to date, failed; changed by
+  `UpdateEvent`s, both in AchtungDomain) and the one answer Sparkle waits for. The
+  window's toolbar shows a pill while the state isn't idle (`UpdateToolbar`); its popover
+  has the build's version, date and size, a link to the commits since the running build,
+  and Install and Relaunch, Skip or Later. "Up to Date" goes away after 5 seconds. A feed
+  or a download that fails its signature check is its own failure ("Update Rejected", red,
+  no Try Again): with ad-hoc signing the EdDSA signature is the only protection, so that
+  means tampering, not a hiccup (`UpdateFailure`, from the codes of Sparkle's error
+  chain). Settings' General tab has "Check for updates automatically" and the version and
+  build. `UpdateSimulator` (Debug only) plays the states without a feed:
+  `macos/scripts/demo.sh -simulateUpdate available` (or `up-to-date`, `tampered-update`,
+  `tampered-feed`, `failed`, `translocated`).
 - The server address is a setting (Settings window, General tab). The app allows plain
   HTTP (ATS exception in the generated Info.plist): servers are self-hosted and protected
   by the operator's network, not by TLS (ADR 0002).

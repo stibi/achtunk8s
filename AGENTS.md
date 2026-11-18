@@ -103,15 +103,18 @@ don't claim it works.
 
 ```bash
 brew install xcodegen swiftlint periphery   # once; Xcode provides swift and swift format
-macos/scripts/check.sh              # format, lint, package tests, app build and tests, dead code
+macos/scripts/check.sh              # format, lint, package tests, release script tests, app build and tests, dead code
 swift format format -i --recursive macos/Achtung macos/Packages/*/{Package.swift,Sources,Tests}   # auto-fix formatting
 swift test --package-path macos/Packages/AchtungDomain             # domain tests (also on Linux)
 swift test --package-path macos/Packages/AchtungAPI                # API mapping tests (also on Linux)
 cd macos && xcodegen generate && open Achtung.xcodeproj           # work in Xcode
-macos/scripts/install.sh            # Release build into ~/Applications, version = commit hash
+macos/scripts/install.sh            # build-release.sh, installed into ~/Applications
+macos/scripts/build-release.sh      # Release build, version = commit hash, build number = commit count; prints the app's path
+python3 -B -m unittest discover -s macos/scripts -p 'test_*.py'   # tests of appcast.py, the update feed's script (also on Linux)
 macos/scripts/run.sh                # Debug build of the working tree, started (quits a running Achtung)
 macos/scripts/demo.sh               # demo mode: run.sh against demo-server.py, a fake server with made-up alerts
 curl -X POST 'http://127.0.0.1:8790/demo/fire?count=1'   # demo mode: fire new critical alerts now (/demo/resend resends one), to try notifications
+macos/scripts/demo.sh -simulateUpdate available   # demo mode with a made-up update in the toolbar (also up-to-date, tampered-update, tampered-feed, failed, translocated)
 make help                           # make run, run-light, demo, install, check, test, xcode: shortcuts for the above
 swift macos/scripts/render-icon.swift   # render macos/Icon/AppIcon.svg into the app icon set
 macos/scripts/render-coffee-break.sh   # render Live's coffee-break krysa as GIFs into macos/Icon/coffee-break/
@@ -120,6 +123,29 @@ macos/scripts/render-coffee-break.sh   # render Live's coffee-break krysa as GIF
 `check.sh` must pass before you finish, like the server's `check`. The Stop hook and the
 pre-commit hook run it only on macOS. On Linux only the package tests run, so CI is the
 gate for everything else. Tooling and CI choices: ADR 0004.
+
+In-app updates use Sparkle (ADR 0021; `macos/Achtung/Updates/`), pinned to an exact
+version in `project.yml`. The updater only exists in a Release build with a build number
+and a public key (`ACHTUNG_UPDATE_PUBLIC_KEY` in `project.yml`, the public half of the
+user's signing key: never generate or commit a key yourself, and never print a private
+one). The feed URL (`ACHTUNG_UPDATE_FEED_URL`) is compiled into every installed copy, so
+don't change either. To test against a local feed with a throwaway key, override both on
+the command line (`build-release.sh` passes its arguments to `xcodebuild`), never in the
+file.
+
+**A push to `main` that touches `macos/`, `api/openapi.yaml` or the workflow publishes
+the client to every installed copy** (`.github/workflows/release-macos.yml`, ADR 0021):
+`check.sh`, then `build-release.sh`, on one machine without secrets; then on another, in
+the GitHub environment `release` (only `main` may use it), `sign-release.sh` signs the
+archive and the feed and the workflow uploads them to the R2 bucket behind
+`updates.achtunk8s.io`. So `check.sh` is a release gate: don't push a client change you
+wouldn't install. The environment's secrets are `SPARKLE_ED_PRIVATE_KEY` and
+`UPDATES_R2_ACCESS_KEY_ID` / `UPDATES_R2_SECRET_ACCESS_KEY` (setup: `infra/README.md`).
+The private key reaches `sign_update` on stdin only; keep it out of arguments, files,
+`set -x` and the build job, and don't add a step to the publish job that runs code from
+the build's archive or from outside this repository. `appcast.py` writes the feed
+(newest 10 builds, never a build number that isn't higher than the feed's) and verifies
+everything signed with the public key in the app; its tests run in `check.sh`.
 
 `AchtungAPI` is generated at build time from `api/openapi.yaml` (through a symlink) by
 swift-openapi-generator's build plugin; no generated code is committed. The first build

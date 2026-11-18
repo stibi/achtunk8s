@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Every check for the macOS client: format, lint, package tests, app build and tests, dead
-# code. Exits non-zero on the first failure. macOS only; needs xcodegen, swiftlint and
+# Every check for the macOS client: format, lint, package tests, the release scripts'
+# tests, app build and tests, dead code. Exits non-zero on the first failure. macOS only; needs xcodegen, swiftlint and
 # periphery (brew install xcodegen swiftlint periphery).
 set -euo pipefail
 
@@ -23,6 +23,11 @@ for package in Packages/*/; do
   step "swift test ($package)"
   swift test --quiet --package-path "$package"
 done
+
+step "release scripts"
+# The update feed's script (ADR 0021). The release workflow runs it with the signing key
+# next to it, so its tests gate every release.
+python3 -B -m unittest discover --quiet -s scripts -p 'test_*.py'
 
 step "xcodebuild build test"
 # AchtungAPI uses swift-openapi-generator's build plugin. Xcode asks to trust a plugin

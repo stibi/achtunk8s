@@ -77,6 +77,9 @@ struct SettingsView: View {
             )
             .font(.caption)
             .foregroundStyle(.secondary)
+            Divider()
+                .padding(.vertical, 6)
+            UpdateSettings()
         }
         .padding(20)
         .frame(width: 440)

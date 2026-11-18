@@ -9,6 +9,8 @@ struct AchtungApp: App {
     @AppStorage(ServerSetting.key) private var serverAddress = ServerSetting.defaultAddress
     /// The connection to the server, with or without a window (ADR 0013).
     @State private var app: AppModel
+    /// In-app updates (ADR 0021).
+    @State private var updates: UpdateController
 
     init() {
         let app = AppModel()
@@ -17,6 +19,9 @@ struct AchtungApp: App {
                 from: UserDefaults.standard.string(forKey: ServerSetting.key)
                     ?? ServerSetting.defaultAddress))
         _app = State(initialValue: app)
+        let updates = UpdateController()
+        updates.start { [weak app] in app?.showWindow() }
+        _updates = State(initialValue: updates)
     }
 
     var body: some Scene {
@@ -40,15 +45,21 @@ struct AchtungApp: App {
                 }
             }
             .frame(minWidth: 900, minHeight: 500)
+            .modifier(UpdateToolbar(model: updates.model))
         }
         .onChange(of: serverAddress) {
             app.connect(to: ServerSetting.url(from: serverAddress))
         }
+        .commands {
+            UpdateCommands(updates: updates)
+        }
         Settings {
             SettingsView(app: app)
+                .environment(updates)
         }
         MenuBarExtra {
             MenuBarMenu(app: app)
+                .environment(updates)
         } label: {
             MenuBarLabel(app: app)
         }

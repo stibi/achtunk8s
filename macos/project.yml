@@ -13,15 +13,26 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
-    # Builds from Xcode or check.sh are "dev"; scripts/install.sh stamps the commit hash
-    # (version) and commit count (build number), shown in About Achtung.
+    # Builds from Xcode or check.sh are "dev"; scripts/build-release.sh stamps the commit
+    # hash (version) and commit count (build number), shown in About Achtung.
     MARKETING_VERSION: dev
     CURRENT_PROJECT_VERSION: "0"
+    # In-app updates (ADR 0021). The public half of the EdDSA key that every update and the
+    # feed are signed with (the private half is the release workflow's). Without it the
+    # app has no updates and says so. The key and the feed's address are compiled into
+    # every installed copy, so they never change. Both can be overridden on xcodebuild's
+    # command line, to test against a local feed with a throwaway key.
+    ACHTUNG_UPDATE_PUBLIC_KEY: gMyt7e6UldwpjoBjxrjUhnIqrpStcUEBFfK2tzWcRt8=
+    ACHTUNG_UPDATE_FEED_URL: https://updates.achtunk8s.io/tip/appcast.xml
 packages:
   AchtungDomain:
     path: Packages/AchtungDomain
   AchtungAPI:
     path: Packages/AchtungAPI
+  # The updater. An exact version: it is what verifies and installs updates (ADR 0021).
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.1
 targets:
   Achtung:
     type: application
@@ -30,6 +41,7 @@ targets:
     dependencies:
       - package: AchtungDomain
       - package: AchtungAPI
+      - package: Sparkle
     # XcodeGen writes this Info.plist (gitignored); Xcode merges the INFOPLIST_KEY_*
     # settings into it. Plain HTTP is allowed because instances are self-hosted and
     # protected by the operator's network, not by TLS (ADR 0002).
@@ -38,6 +50,17 @@ targets:
       properties:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        # Sparkle (ADR 0021). The feed and every update must carry our EdDSA signature;
+        # with ad-hoc code signing nothing else protects an update. Sparkle refuses to
+        # start with SURequireSignedFeed unless SUVerifyUpdateBeforeExtraction is on too.
+        # It checks once a day without asking first, and never installs by itself.
+        SUFeedURL: $(ACHTUNG_UPDATE_FEED_URL)
+        SUPublicEDKey: $(ACHTUNG_UPDATE_PUBLIC_KEY)
+        SURequireSignedFeed: true
+        SUVerifyUpdateBeforeExtraction: true
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
+        SUAllowsAutomaticUpdates: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.stibi.achtung
