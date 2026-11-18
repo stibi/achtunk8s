@@ -15,7 +15,8 @@ private func occurrence(
             labels: ["alertname": title], annotations: [:], startsAt: Fixture.start, links: [],
             state: resolved ? .resolved(endsAt: Fixture.minutes(minutes)) : .firing),
         firstReceivedAt: Fixture.start, lastReceivedAt: Fixture.minutes(minutes),
-        lastEventAt: Fixture.minutes(minutes), lastEventKind: resolved ? .resolved : kind,
+        lastEventAt: Fixture.minutes(minutes),
+        lastEventKind: resolved && kind == .fired ? .resolved : kind,
         notificationCount: 1, silencedUntil: silencedUntil)
 }
 
@@ -49,6 +50,41 @@ private func notifying(
     ]
 
     #expect(notifying(feed) == [2, 3, 1])
+}
+
+@Test func aReminderThatCameDueNotifiesWhateverTheRulesWouldLeaveOut() {
+    let feed = [
+        occurrence(1, at: 5, kind: .reminded, severity: .info),
+        occurrence(2, at: 6, kind: .reminded, resolved: true),
+        occurrence(3, at: 7, kind: .reminded, silencedUntil: Fixture.minutes(90)),
+        occurrence(4, at: 8, kind: .reminded, name: "Watchdog"),
+        occurrence(5, at: 9, severity: .info),
+    ]
+    let rules = NotificationRules(severities: [.critical], ignoredNames: ["Watchdog"])
+
+    #expect(notifying(feed, rules: rules) == [4, 3, 2, 1])
+}
+
+@Test func aReminderNotifiesOnceAndNotWhenReadOrBeforeTheBaseline() {
+    let reminded = occurrence(1, at: 5, kind: .reminded)
+    var ledger = NotificationLedger()
+    ledger.record([reminded])
+    var read = ReadState()
+    read.markRead(reminded)
+
+    #expect(notifying([reminded], ledger: ledger).isEmpty)
+    #expect(notifying([reminded], readState: read).isEmpty)
+    #expect(notifying([reminded], baseline: Fixture.minutes(5)).isEmpty)
+}
+
+@Test func aReminderIsWordedAsOne() {
+    #expect(AlertNotificationPlan.title(of: occurrence(1, at: 5)) == "Alert1")
+    #expect(
+        AlertNotificationPlan.title(of: occurrence(1, at: 5, kind: .reminded))
+            == "Reminder: Alert1")
+    #expect(
+        AlertNotificationPlan.title(of: occurrence(1, at: 5, kind: .reminded, resolved: true))
+            == "Reminder: Alert1 (resolved)")
 }
 
 @Test func eachEventNotifiesOnce() {

@@ -16,6 +16,7 @@ import type {
   OccurrenceFilter,
   OccurrencePage,
 } from "../services/inbox.ts";
+import type { ReminderResult } from "../services/reminders.ts";
 import type { SilenceResult } from "../services/silences.ts";
 
 /** The inbox's use cases, as the client API needs them. */
@@ -29,6 +30,9 @@ export interface Inbox {
   getOccurrence(id: number): Promise<OccurrenceDetail | null>;
   silenceOccurrence(id: number, durationSeconds: number): Promise<SilenceResult>;
   unsilenceOccurrence(id: number): Promise<SilenceResult>;
+  /** Sets or replaces the occurrence's reminder (ADR 0025). */
+  setOccurrenceReminder(id: number, remindAt: Date): Promise<ReminderResult>;
+  cancelOccurrenceReminder(id: number): Promise<ReminderResult>;
   silenceAlertmanagerAlerts(
     instance: string,
     fingerprints: readonly string[],

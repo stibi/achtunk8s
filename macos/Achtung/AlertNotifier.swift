@@ -108,7 +108,7 @@ final class AlertNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     private func post(_ occurrence: Occurrence, server: URL) {
         let content = UNMutableNotificationContent()
-        content.title = occurrence.alert.title
+        content.title = AlertNotificationPlan.title(of: occurrence)
         content.subtitle = "\(occurrence.channel.instance) · #\(occurrence.channel.slug)"
         content.body = occurrence.alert.summary ?? ""
         content.sound = .default

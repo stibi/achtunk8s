@@ -155,23 +155,26 @@ private struct CollapsedLiveCard: View {
     }
 
     @ViewBuilder private func status(silencedUntil: Date?) -> some View {
-        let resentAt = occurrence.isResent ? occurrence.lastEventAt : nil
+        let resurfaced = Resurfaced(occurrence)
+        let remindAt = occurrence.remindAt
         // The rows keep their pills whole: when one doesn't fit, the next takes its place.
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
-                AlertStatus(alert: alert, silencedUntil: silencedUntil, resentAt: resentAt)
+                AlertStatus(
+                    alert: alert, silencedUntil: silencedUntil, resurfaced: resurfaced,
+                    remindAt: remindAt)
             }
             .fixedSize()
             HStack(spacing: 8) {
                 AlertStatus(
-                    alert: alert, silencedUntil: silencedUntil, resentAt: resentAt,
-                    showsAge: false)
+                    alert: alert, silencedUntil: silencedUntil, resurfaced: resurfaced,
+                    remindAt: remindAt, showsAge: false)
             }
             .fixedSize()
             FlowLayout(spacing: 8) {
                 AlertStatus(
-                    alert: alert, silencedUntil: silencedUntil, resentAt: resentAt,
-                    showsAge: false)
+                    alert: alert, silencedUntil: silencedUntil, resurfaced: resurfaced,
+                    remindAt: remindAt, showsAge: false)
             }
         }
     }

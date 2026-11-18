@@ -10,6 +10,7 @@ import {
 } from "./inbox.ts";
 import { ingestNotification } from "./ingest.ts";
 import type { IrmHeartbeats } from "./irm-heartbeats.ts";
+import { cancelOccurrenceReminder, remindDue, setOccurrenceReminder } from "./reminders.ts";
 import { getIgnoredAlertNames, setIgnoredAlertNames } from "./settings.ts";
 import { type Silences, silenceOccurrence, unsilenceOccurrence } from "./silences.ts";
 
@@ -50,6 +51,22 @@ export function servicesFor(
       changing("silences", silenceOccurrence(db, silences, id, durationSeconds)),
     unsilenceOccurrence: (id: number) =>
       changing("silences", unsilenceOccurrence(db, silences, id)),
+    setOccurrenceReminder: (id: number, remindAt: Date) =>
+      changing("occurrences", setOccurrenceReminder(db, silences, id, remindAt, now())),
+    cancelOccurrenceReminder: (id: number) =>
+      changing("occurrences", cancelOccurrenceReminder(db, silences, id, now())),
+    /** The sweep main.ts runs. Published when a reminder came due: that is news. */
+    remindDue: async () => {
+      const reminded: number[] = [];
+      try {
+        return await remindDue(db, now, reminded);
+      } finally {
+        // Also when the sweep failed after some came due: those are resurfaced.
+        if (reminded.length > 0) {
+          changes.publish("occurrences");
+        }
+      }
+    },
     silenceAlertmanagerAlerts: (
       instance: string,
       fingerprints: readonly string[],

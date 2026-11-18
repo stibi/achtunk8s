@@ -10,7 +10,7 @@ import {
 import { findInstancesWithChannel } from "../db/queries.ts";
 import type { IncomingAlert } from "../domain/alert.ts";
 import { type ChannelAddress, resolveChannel } from "../domain/channel.ts";
-import { type EventKind, eventFor } from "../domain/occurrence.ts";
+import { type ChangeKind, eventFor } from "../domain/occurrence.ts";
 
 /** One webhook delivery from a source, already parsed into domain alerts. */
 export interface Notification {
@@ -49,7 +49,7 @@ export function ingestNotification(
       notification.receiver,
       now,
     );
-    const recorded: (EventKind | null)[] = [];
+    const recorded: (ChangeKind | null)[] = [];
     // Sequential on purpose: one transaction, and a fixed lock order (see inLockOrder).
     for (const alert of inLockOrder(notification.alerts)) {
       const key = { channelId, source: notification.source, alert };
@@ -67,7 +67,7 @@ async function ingestAlert(
   tx: Transaction,
   key: OccurrenceKey,
   now: Date,
-): Promise<EventKind | null> {
+): Promise<ChangeKind | null> {
   const insertedId = await insertOccurrence(tx, key, now);
   if (insertedId !== null) {
     return record(tx, insertedId, eventFor(null, key.alert.status, now), now);
@@ -80,9 +80,9 @@ async function ingestAlert(
 async function record(
   tx: Transaction,
   occurrenceId: number,
-  kind: EventKind | null,
+  kind: ChangeKind | null,
   now: Date,
-): Promise<EventKind | null> {
+): Promise<ChangeKind | null> {
   if (kind !== null) {
     await recordEvent(tx, occurrenceId, kind, now);
   }

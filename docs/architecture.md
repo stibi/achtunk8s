@@ -100,6 +100,10 @@ The identity below is a contract that features build on
   `services/reconcile.ts` with a `resolved` event whose `cause` is `vanished`
   ([ADR 0014](adr/0014-resolve-vanished-occurrences.md)). A later firing notification
   reopens it like any resolved occurrence.
+- Another has no notification behind it either: a reminder someone set on the occurrence
+  coming due records a `reminded` event, which resurfaces it like a resend, whatever its
+  state ([ADR 0025](adr/0025-remind-me.md)). Setting and cancelling a reminder are events
+  too (`reminder_set`, `reminder_cancelled`), but they don't move `lastEventAt`.
 
 ## Ingest and storage
 
@@ -121,7 +125,8 @@ The identity below is a contract that features build on
 - Tables (`src/db/schema.ts`): `channels` (with the `receiver` that last delivered to
   it, written only when it changes, so ingest doesn't lock the row), `occurrences` (one
   row per occurrence, with the latest fields reported for it), `events` (append-only
-  history), and `ignored_alert_names` (a setting, ADR 0011). Raw payloads
+  history), `ignored_alert_names` (a setting, ADR 0011) and `reminders` (the reminder
+  pending on an occurrence, at most one, ADR 0025). Raw payloads
   are not stored. `events.id` is not a safe stream cursor: ids are assigned at insert,
   so a lower id can commit after a higher one. The change stream needs none: it replays
   nothing, and a client re-reads everything when it connects (ADR 0019).
@@ -132,8 +137,8 @@ The identity below is a contract that features build on
 
 ## Client API
 
-- Routes under `/api/` (`src/http/api.ts`), read-only except the silence button and the
-  ignored alert names:
+- Routes under `/api/` (`src/http/api.ts`), read-only except the silence button, the
+  reminders and the ignored alert names:
   - `GET /api/channels`: channels by instance and name, with how many occurrences are
     firing and the latest event time. The client shows them as a tree: instances, then
     their channels. `Channel` and `Occurrence` both carry `instance`.
@@ -162,6 +167,15 @@ The identity below is a contract that features build on
   - `DELETE /api/occurrences/{id}/silence`: ends the alert's own (exact) silences now and
     returns the occurrence; a broader silence is left alone and still shows in
     `silencedUntil`, and 409 when only such a one mutes it (ADR 0015).
+  - `PUT /api/occurrences/{id}/reminder` with `{ "remindAt": "…" }` (in the future, at
+    most a year ahead, else 400) sets the occurrence's reminder, replacing one it has, and
+    `DELETE` cancels it; both return the occurrence, whose `remindAt` is its pending
+    reminder's time or null ([ADR 0025](adr/0025-remind-me.md)). `services/reminders.ts`'s
+    `remindDue`, run by `main.ts` every 30 seconds and at startup, claims each due
+    reminder (`for update skip locked`), deletes it and records `reminded` in one
+    transaction per reminder, so it comes due once, also with several servers, and one due
+    while the server was down comes due on the first sweep after. A reminder is everyone's
+    (ADR 0002).
   - `POST /api/alertmanagers/{instance}/silences` with `{ "fingerprints": [...],
     "durationSeconds": ... }`: silences each of the Alertmanager's alerts, found by
     fingerprint in a fresh read, with its own exact silence, also alerts that aren't in
@@ -342,6 +356,23 @@ The identity below is a contract that features build on
   recorded itself, because the alert was gone from its Alertmanager, as "Resolved …" over
   "Gone from Alertmanager", with a question-mark check and a help text saying
   Alertmanager never sent the resolve; Copy for Agent's history says so too.
+- Reminders (ADR 0025). "Remind Me" in an alert's details (`ReminderButton`, ⇧⌘R in the
+  detail pane) opens a popover with the presets and the time each means now
+  (`ReminderPreset` in AchtungDomain: later today, this evening, tomorrow morning, next
+  week; computed in the user's calendar and time zone, a preset with nothing to offer left
+  out), and a date and time to pick. A row's context menu has the presets too
+  (`ReminderMenuItems`). Setting one (`PUT /api/occurrences/{id}/reminder`) marks the alert
+  read here; while it is pending the button, the header (`ReminderPill`) and the row say
+  when, and the popover changes or cancels it. Once it came due the alert is unread again
+  with an alarm for its unread mark and a "Reminder" pill (`RemindedPill`), like a resend's.
+  The views get the actions from the environment (`ReminderActions`, set by `InboxView`).
+  In the history: "Reminder set" with the time it was set for, "Reminder cancelled", and
+  "Reminder" where one came due. Copy for Agent lists them with their kind
+  (`reminder_set for …`). A server from before reminders sends no `remindAt` and answers
+  404 for the route: its alerts show as before, and Remind Me says the server is too old.
+  A reminder set or cancelled on another Mac doesn't move `lastEventAt`, so, like a
+  silence's end, it shows here on the next refresh only for alerts on the newest page,
+  which every refresh re-reads; for older ones, when their list is loaded again.
 - Search (ADR 0017): the window's search field (⌘F, `InboxSearch`) searches every
   channel 300 ms after typing stops (`GET /api/occurrences` with `q`, `label`, `severity`,
   `instance`). A finished word that names a filter becomes a token: `name=value` (a
@@ -536,7 +567,9 @@ The identity below is a contract that features build on
   `AlertNotificationState` in AchtungDomain which occurrences to announce: new, reopened
   or resent firings after the connection's baseline (the first refresh's newest event),
   of the severities picked in Settings' Notifications tab, not silenced, read or ignored
-  (ADR 0011), each event once (a ledger). The baseline and the ledger are saved per
+  (ADR 0011), each event once (a ledger). A reminder that came due (`lastEventKind`
+  `reminded`, ADR 0025) notifies whatever those rules would leave out, firing or resolved,
+  titled "Reminder: …". The baseline and the ledger are saved per
   server and restored on the next launch within a day, so what fired while Achtung was
   closed notifies then (ADR 0018). The alert whose detail is on screen in the active app
   gets no banner: the window tells `AppModel` which one it shows.

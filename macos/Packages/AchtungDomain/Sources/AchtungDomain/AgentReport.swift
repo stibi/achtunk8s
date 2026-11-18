@@ -45,6 +45,7 @@ public enum AgentReport {
         if let events, !events.isEmpty {
             let lines = events.map { event in
                 "- \(iso(event.recordedAt)) \(event.kind.rawValue)"
+                    + (event.remindAt.map { " for \(iso($0))" } ?? "")
                     + (event.cause == .vanished
                         ? " (gone from Alertmanager: Achtung resolved it itself, Alertmanager "
                             + "never sent the resolve)" : "")

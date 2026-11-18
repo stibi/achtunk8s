@@ -17,10 +17,10 @@ import {
 import { z } from "zod";
 import type { AlertState } from "../domain/alert.ts";
 import type { ChannelRef, ChannelSlug, InstanceName } from "../domain/channel.ts";
-import type { Occurrence, OccurrenceEvent } from "../domain/occurrence.ts";
+import type { ChangeKind, EventKind, Occurrence, OccurrenceEvent } from "../domain/occurrence.ts";
 import type { OccurrenceSearch } from "../domain/search.ts";
 import type { Database, Transaction } from "./client.ts";
-import { channels, events, occurrences } from "./schema.ts";
+import { channels, events, occurrences, reminders } from "./schema.ts";
 import { searchCondition } from "./search.ts";
 
 // Mirrors services/inbox.ts OccurrenceFilter structurally; db/ can't import services.
@@ -42,15 +42,17 @@ const occurrenceColumns = {
   ...getTableColumns(occurrences),
   instance: channels.instance,
   channel: channels.slug,
+  remindAt: reminders.remindAt,
 };
 
 type OccurrenceRow = Awaited<ReturnType<typeof selectOccurrences>>[number];
 
 function toOccurrence(row: OccurrenceRow): Occurrence {
-  const { channelId: _, status, endsAt, instance, channel, ...fields } = row;
+  const { channelId: _, status, endsAt, instance, channel, lastEventKind, ...fields } = row;
   return {
     ...fields,
     ...stateOf(row.id, status, endsAt),
+    lastEventKind: changeKindOf(row.id, lastEventKind),
     instance: instance as InstanceName,
     channel: channel as ChannelSlug,
     labels: labelSet.parse(fields.labels),
@@ -69,11 +71,20 @@ function stateOf(id: number, status: AlertState["status"], endsAt: Date | null):
   return { status, endsAt };
 }
 
+// Only recordEvent writes the column, and only with news (ADR 0025).
+function changeKindOf(id: number, kind: EventKind): ChangeKind {
+  if (kind === "reminder_set" || kind === "reminder_cancelled") {
+    throw new Error(`Occurrence ${id} has ${kind} as its last event, which isn't news`);
+  }
+  return kind;
+}
+
 function selectOccurrences(db: Database, where: SQL | undefined) {
   return db
     .select(occurrenceColumns)
     .from(occurrences)
     .innerJoin(channels, eq(channels.id, occurrences.channelId))
+    .leftJoin(reminders, eq(reminders.occurrenceId, occurrences.id))
     .where(where);
 }
 
@@ -146,17 +157,27 @@ export async function findOccurrence(db: Database, id: number): Promise<Occurren
   return row === undefined ? null : toOccurrence(row);
 }
 
-export function listEvents(db: Database, occurrenceId: number): Promise<OccurrenceEvent[]> {
-  return db
+export async function listEvents(db: Database, occurrenceId: number): Promise<OccurrenceEvent[]> {
+  const rows = await db
     .select({
       id: events.id,
       kind: events.kind,
       cause: events.cause,
       recordedAt: events.recordedAt,
+      remindAt: events.remindAt,
     })
     .from(events)
     .where(eq(events.occurrenceId, occurrenceId))
     .orderBy(asc(events.id));
+  return rows.map(({ kind, remindAt, ...event }) => {
+    if (kind === "reminder_set") {
+      if (remindAt === null) {
+        throw new Error(`Event ${event.id} sets a reminder without a time, despite the check`);
+      }
+      return { ...event, kind, remindAt };
+    }
+    return { ...event, kind, remindAt: null };
+  });
 }
 
 /** Other occurrences of the same alert (same identity, different start), newest first. */
@@ -309,6 +330,7 @@ export async function listNoisiestAlerts(
     .selectDistinctOn([...identity], occurrenceColumns)
     .from(occurrences)
     .innerJoin(channels, eq(channels.id, occurrences.channelId))
+    .leftJoin(reminders, eq(reminders.occurrenceId, occurrences.id))
     .where(
       sql`(${occurrences.channelId}, ${occurrences.source}, ${occurrences.sourceKey}) in (${sql.join(
         noisiest.map((alert) => sql`(${alert.channelId}, ${alert.source}, ${alert.sourceKey})`),

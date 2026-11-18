@@ -25,6 +25,7 @@ struct AlertList: View {
     /// What a silence from the context menu came to, when it needs saying: an error, or a
     /// broader silence that still mutes the alert.
     @State private var silenceMessage: String?
+    @State private var reminderMessage: String?
 
     var body: some View {
         if occurrences.isEmpty && hidesRead {
@@ -49,6 +50,7 @@ struct AlertList: View {
                         Button("Copy for Agent", systemImage: "doc.on.doc") {
                             copy(occurrence)
                         }
+                        ReminderMenuItems(occurrence: occurrence) { reminderMessage = $0 }
                         Divider()
                         silenceItems(for: occurrence)
                     }
@@ -66,7 +68,14 @@ struct AlertList: View {
                 isPresented: Binding(
                     get: { silenceMessage != nil }, set: { if !$0 { silenceMessage = nil } }),
                 actions: { Button("OK") { silenceMessage = nil } },
-                message: { Text(silenceMessage ?? "") })
+                message: { Text(silenceMessage ?? "") }
+            )
+            .alert(
+                "Reminder",
+                isPresented: Binding(
+                    get: { reminderMessage != nil }, set: { if !$0 { reminderMessage = nil } }),
+                actions: { Button("OK") { reminderMessage = nil } },
+                message: { Text(reminderMessage ?? "") })
         }
     }
 

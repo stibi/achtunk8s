@@ -25,6 +25,8 @@ export const unusedServices: Services = {
   getOccurrence: unused,
   silenceOccurrence: unused,
   unsilenceOccurrence: unused,
+  setOccurrenceReminder: unused,
+  cancelOccurrenceReminder: unused,
   silenceAlertmanagerAlerts: unused,
   getHome: unused,
   listAlertmanagerAlerts: unused,
@@ -53,9 +55,13 @@ export interface TestAppOptions {
 }
 
 /** The real app on a fresh test database. */
-export async function appWithDatabase(
-  options: TestAppOptions = {},
-): Promise<{ app: FastifyInstance; services: Services; reconciler: Reconciler }> {
+export async function appWithDatabase(options: TestAppOptions = {}): Promise<{
+  app: FastifyInstance;
+  services: Services;
+  reconciler: Reconciler;
+  /** The due-reminder sweep main.ts runs (ADR 0025), on the services' clock. */
+  remindDue: () => Promise<number[]>;
+}> {
   const logLines = options.logLines ?? [];
   const { db } = await createTestDatabase();
   const endpoints = new Map(Object.entries(options.alertmanagers ?? {}));
@@ -84,5 +90,10 @@ export async function appWithDatabase(
     ...(options.events === undefined ? {} : { events: options.events }),
   });
   onTestFinished(() => app.close());
-  return { app, services, reconciler: reconcilerFor(db, alerts, changes, options.now) };
+  return {
+    app,
+    services,
+    reconciler: reconcilerFor(db, alerts, changes, options.now),
+    remindDue: services.remindDue,
+  };
 }

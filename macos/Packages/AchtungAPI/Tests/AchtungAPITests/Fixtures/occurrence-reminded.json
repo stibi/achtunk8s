@@ -1,0 +1,116 @@
+{
+  "occurrence": {
+    "id": 9,
+    "instance": "onprem",
+    "channel": "legal-machine-prod",
+    "source": "alertmanager",
+    "sourceKey": "c0ffee0000000004",
+    "status": "resolved",
+    "severity": "critical",
+    "title": "HighErrorRate",
+    "summary": "5xx rate above 5% for 10 minutes.",
+    "labels": {
+      "severity": "critical",
+      "alertname": "HighErrorRate",
+      "namespace": "example-prod"
+    },
+    "annotations": {
+      "summary": "5xx rate above 5% for 10 minutes."
+    },
+    "links": [
+      {
+        "kind": "source",
+        "url": "https://prometheus.example.com/graph"
+      }
+    ],
+    "startsAt": "2026-11-07T19:00:00.000Z",
+    "endsAt": "2026-11-07T23:40:00.000Z",
+    "firstReceivedAt": "2026-11-07T21:14:19.643Z",
+    "lastReceivedAt": "2026-11-07T22:14:30.000Z",
+    "lastEventAt": "2026-11-08T07:00:12.000Z",
+    "lastEventKind": "reminded",
+    "notificationCount": 13,
+    "remindAt": null,
+    "silencedUntil": null
+  },
+  "events": [
+    {
+      "id": 9,
+      "kind": "fired",
+      "cause": null,
+      "recordedAt": "2026-11-07T21:14:19.643Z",
+      "remindAt": null
+    },
+    {
+      "id": 22,
+      "kind": "reminder_set",
+      "cause": null,
+      "recordedAt": "2026-11-07T22:20:00.000Z",
+      "remindAt": "2026-11-08T06:00:00.000Z"
+    },
+    {
+      "id": 23,
+      "kind": "reminder_cancelled",
+      "cause": null,
+      "recordedAt": "2026-11-07T22:21:00.000Z",
+      "remindAt": null
+    },
+    {
+      "id": 24,
+      "kind": "reminder_set",
+      "cause": null,
+      "recordedAt": "2026-11-07T22:21:30.000Z",
+      "remindAt": "2026-11-08T07:00:00.000Z"
+    },
+    {
+      "id": 25,
+      "kind": "resolved",
+      "cause": null,
+      "recordedAt": "2026-11-07T23:40:00.000Z",
+      "remindAt": null
+    },
+    {
+      "id": 31,
+      "kind": "reminded",
+      "cause": null,
+      "recordedAt": "2026-11-08T07:00:12.000Z",
+      "remindAt": null
+    }
+  ],
+  "otherOccurrences": [
+    {
+      "id": 7,
+      "instance": "onprem",
+      "channel": "legal-machine-prod",
+      "source": "alertmanager",
+      "sourceKey": "c0ffee0000000004",
+      "status": "resolved",
+      "severity": "critical",
+      "title": "HighErrorRate",
+      "summary": "5xx rate above 5% for 10 minutes.",
+      "labels": {
+        "severity": "critical",
+        "alertname": "HighErrorRate",
+        "namespace": "example-prod"
+      },
+      "annotations": {
+        "summary": "5xx rate above 5% for 10 minutes."
+      },
+      "links": [
+        {
+          "kind": "source",
+          "url": "https://prometheus.example.com/graph"
+        }
+      ],
+      "startsAt": "2026-11-07T18:00:00.000Z",
+      "endsAt": "2026-11-07T18:20:00.000Z",
+      "firstReceivedAt": "2026-11-07T21:14:19.586Z",
+      "lastReceivedAt": "2026-11-07T21:14:19.610Z",
+      "lastEventAt": "2026-11-07T21:14:19.610Z",
+      "lastEventKind": "resolved",
+      "notificationCount": 2,
+      "remindAt": null,
+      "silencedUntil": null
+    }
+  ]
+}

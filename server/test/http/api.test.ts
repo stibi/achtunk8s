@@ -70,6 +70,7 @@ describe("GET /api/channels/{slug}/occurrences", () => {
           lastEventAt: "2026-10-13T08:30:00.000Z",
           lastEventKind: "fired",
           notificationCount: 1,
+          remindAt: null,
           silencedUntil: null,
         },
       ],
@@ -164,12 +165,14 @@ describe("GET /api/occurrences/{id}", () => {
         kind: "fired",
         cause: null,
         recordedAt: "2026-10-13T08:30:00.000Z",
+        remindAt: null,
       },
       {
         id: expect.any(Number),
         kind: "resolved",
         cause: null,
         recordedAt: "2026-10-13T08:45:00.000Z",
+        remindAt: null,
       },
     ]);
     expect(body.otherOccurrences).toEqual([

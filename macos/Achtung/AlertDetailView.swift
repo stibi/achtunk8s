@@ -69,7 +69,7 @@ struct AlertDetails: View {
     let silence: SilenceActions
     /// The history, for "Copy for Agent", once it has loaded; Live's cards don't have it.
     var events: [OccurrenceEvent]?
-    /// ⇧⌘C copies: only in the detail pane, where one alert is shown.
+    /// ⇧⌘C copies and ⇧⌘R reminds: only in the detail pane, where one alert is shown.
     var hasCopyShortcut = false
     /// Collapses a Live card when its header is clicked; nil in the detail pane.
     var collapse: (() -> Void)?
@@ -90,6 +90,8 @@ struct AlertDetails: View {
                             occurrence: occurrence, isSilenced: isSilenced, actions: silence
                         )
                         .id(occurrence.id)
+                        ReminderButton(occurrence: occurrence, hasShortcut: hasCopyShortcut)
+                            .id(occurrence.id)
                         CopyForAgentButton(
                             occurrence: occurrence, events: events, hasShortcut: hasCopyShortcut
                         )
@@ -106,14 +108,16 @@ struct AlertDetails: View {
     private func header(isSilenced: Bool) -> some View {
         AlertHeader(
             alert: alert, silencedUntil: isSilenced ? occurrence.silencedUntil : nil,
-            resentAt: occurrence.isResent ? occurrence.lastEventAt : nil, collapse: collapse)
+            resurfaced: Resurfaced(occurrence), remindAt: occurrence.remindAt,
+            collapse: collapse)
     }
 }
 
 private struct AlertHeader: View {
     let alert: IncomingAlert
     let silencedUntil: Date?
-    let resentAt: Date?
+    let resurfaced: Resurfaced?
+    let remindAt: Date?
     /// Collapses a Live card on a click on the icon, title or status; the times stay
     /// selectable.
     let collapse: (() -> Void)?
@@ -126,8 +130,12 @@ private struct AlertHeader: View {
                 Text(alert.title)
                     .font(.title.bold())
                     .collapsing(collapse)
-                HStack(spacing: 8) {
-                    AlertStatus(alert: alert, silencedUntil: silencedUntil, resentAt: resentAt)
+                // On one line when it fits; a silence, a reminder and a resend together are
+                // wider than a narrow pane, and wrap whole.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { status }
+                        .fixedSize()
+                    FlowLayout(spacing: 8) { status }
                 }
                 .font(.callout)
                 .collapsing(collapse)
@@ -137,6 +145,14 @@ private struct AlertHeader: View {
                     .textSelection(.enabled)
             }
         }
+    }
+}
+
+extension AlertHeader {
+    private var status: some View {
+        AlertStatus(
+            alert: alert, silencedUntil: silencedUntil, resurfaced: resurfaced,
+            remindAt: remindAt)
     }
 }
 
@@ -164,22 +180,45 @@ struct SeverityIcon: View {
     }
 }
 
-/// The line under an alert's title: its status, resend and silence, severity and, unless
-/// left out for room, how long ago it started. No container of its own, so a row or a
-/// flow can hold it.
+/// Why an occurrence is unread again without being new: its source resent it, or a
+/// reminder set on it came due (ADR 0009, ADR 0025).
+enum Resurfaced: Equatable {
+    case resent(Date)
+    case reminded(Date)
+
+    init?(_ occurrence: Occurrence) {
+        if occurrence.isResent {
+            self = .resent(occurrence.lastEventAt)
+        } else if occurrence.isReminded {
+            self = .reminded(occurrence.lastEventAt)
+        } else {
+            return nil
+        }
+    }
+}
+
+/// The line under an alert's title: its status, resend or reminder, silence, pending
+/// reminder, severity and, unless left out for room, how long ago it started. No container
+/// of its own, so a row or a flow can hold it.
 struct AlertStatus: View {
     let alert: IncomingAlert
     let silencedUntil: Date?
-    let resentAt: Date?
+    let resurfaced: Resurfaced?
+    var remindAt: Date?
     var showsAge = true
 
     var body: some View {
         StatusPill(alert: alert)
-        if let resentAt {
-            ResentPill(date: resentAt)
+        switch resurfaced {
+        case .resent(let date): ResentPill(date: date)
+        case .reminded(let date): RemindedPill(date: date)
+        case nil: EmptyView()
         }
         if let silencedUntil {
             SilencedPill(until: silencedUntil)
+        }
+        if let remindAt {
+            ReminderPill(date: remindAt)
         }
         Text(alert.severity.rawValue.capitalized)
             .foregroundStyle(alert.severity.color)

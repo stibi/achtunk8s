@@ -71,7 +71,8 @@ struct ResentPill: View {
 }
 
 /// Where a row or card shows that it's unread: a dot for something new, a circular arrow
-/// for a resend of an alert that was already there. Nothing once read.
+/// for a resend of an alert that was already there, an alarm for a reminder that came due.
+/// Nothing once read.
 struct UnreadMark: View {
     let occurrence: Occurrence
     let isRead: Bool
@@ -86,6 +87,13 @@ struct UnreadMark: View {
                 .frame(width: 8, height: 8)
                 .help(ResentPill.explanation)
                 .accessibilityLabel("Unread, resent")
+        } else if occurrence.isReminded {
+            Image(systemName: "alarm.fill")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 8, height: 8)
+                .help(RemindedPill.explanation)
+                .accessibilityLabel("Unread, reminder")
         } else {
             Circle()
                 .fill(Color.accentColor)

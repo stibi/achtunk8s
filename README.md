@@ -39,6 +39,8 @@ you silence it where it came from.
   Every firing is kept, so you see how often an alert came back.
 - **New since you last looked.** Unread badges per channel, an "Unread only" view and
   Mark All as Read (⇧⌘K).
+- **Remind Me.** An alert that can wait comes back as unread when you say: this evening,
+  tomorrow morning, next week, or a date and time you pick.
 - **Resends resurface.** An alert still firing after an hour comes back as *resent*,
   marked apart from new ones.
 - **Home:** every Alertmanager at a glance: open alerts by severity, silenced, inhibited,
@@ -98,7 +100,7 @@ detail, and [`docs/adr/`](docs/adr/) has the reasons behind each decision.
 | **Channel** | A stream of alerts within an instance, one webhook URL each. |
 | **Alert** | Identified by its source, channel and key (for Alertmanager the `fingerprint`, a hash of its labels). |
 | **Occurrence** | One firing of an alert, from start to resolve. A new firing is a new occurrence. |
-| **Event** | What happened to an occurrence: fired, resolved, reopened or resent. |
+| **Event** | What happened to an occurrence: fired, resolved, reopened, resent, or a reminder set, cancelled or come due. |
 | **Read state** | What this Mac has seen. Stored locally, never on the server. |
 
 ## Alert identity and history
@@ -128,6 +130,24 @@ alert would sink out of sight. The middle ground: once an hour without other eve
 repeat records a `resent` event. The alert becomes unread again, with a circular arrow
 instead of the dot, and can notify again.
 [ADR 0009](docs/adr/0009-resends-resurface-alerts.md).
+
+## Remind me later
+
+![An alert in the macOS app with the Remind Me popover open under its button: Tomorrow Morning and Next Week with the time each means, and a date and time to pick; the alert's history lists its resends and the reminders that were set and came due](docs/media/remind-me.png)
+
+Some alerts can wait, but shouldn't be forgotten. **Remind Me** (⇧⌘R in an alert's
+details, or a row's context menu) takes a time: later today, this evening, tomorrow
+morning, next week, or a date and time you pick. The alert is marked read and leaves the
+unread list. At that time the server makes it unread again, first in its lists, with a
+*Reminder* mark and a notification, whether it still fires or has resolved, and also when
+your Mac was asleep in between. Setting, cancelling and coming due are in the alert's
+history.
+
+![An alert after its reminder came due: unread again, a "Reminder" pill with the time in its header, and "Reminder set" and "Reminder" in its history](docs/media/reminded.png)
+
+There are no users, so a reminder is everyone's: it shows on the alert for all, resurfaces
+it for all, and anyone can change or cancel it
+([ADR 0025](docs/adr/0025-remind-me.md)).
 
 ## Unread, Live and the timeline
 
@@ -203,7 +223,8 @@ and a label's context menu in an alert's details searches for it
 
 ![A macOS notification for a new critical alert, its Options menu with Mark as Read and Silence 1h, 4h, 1d and 1w, then the alert opening in the app](docs/media/notification.gif)
 
-New, reopened and resent critical alerts (warning too, if you choose) post a macOS
+New, reopened and resent critical alerts (warning too, if you choose), and any alert whose
+reminder came due, post a macOS
 notification with Mark as Read and Silence on it. More than three at once become one
 summary. Closing the window leaves the app in the menu bar with a count of unread
 critical alerts, and it stays connected to the server

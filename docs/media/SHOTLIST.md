@@ -15,6 +15,9 @@ from the macOS app in demo mode, so only made-up data is visible: instances `eu-
   - `curl -X POST 'http://127.0.0.1:8790/demo/fire?count=1'`: new critical alerts
     (`count=4` for a summary notification).
   - `curl -X POST http://127.0.0.1:8790/demo/resend`: resend the newest firing alert.
+  - `curl -X POST http://127.0.0.1:8790/demo/remind`: every pending reminder comes due.
+    Without it, the reminder on `CertificateExpiringSoon` (eu-prod) comes due 90 s in, and
+    `BackupJobFailed` (eu-prod) keeps one pending.
 - **Appearance:** light mode for every still and clip, so the set matches. The hero tour
   (`achtung-demo.gif`) is the exception and stays as recorded.
 - **Window:** 1440 × 900 points for the main window (stills at 2×, i.e. 2880 × 1800
@@ -45,6 +48,8 @@ from the macOS app in demo mode, so only made-up data is visible: instances `eu-
 | `search.gif` (+ `.png`, `.mp4`) | ⌘F, typing `api`, then `namespace=prod` turning into a token, results from several channels (eu-prod › payments, us-prod › checkout) with their channel; Return opens one. Still: results with the token. | Live or any channel, ⌘F, type `api `, then `namespace=prod ` (the space finishes the token). |
 | `notification.gif` (+ `.png`, `.mp4`) | A banner for a new critical alert, hover → Options → Mark as Read / Silence 1h … 1w, then clicking the banner opens the alert. Still: the banner with Options open. | Make sure notifications are on in Settings (allow when macOS asks). Close the window (app stays in the menu bar), then `curl -X POST 'http://127.0.0.1:8790/demo/fire?count=1'`. Capture the top-right screen region. |
 | `menu-bar.png` | The bell menu: unread critical count, newest critical alerts, Mark Critical Alerts as Read, Pause Notifications. | After a fire or two, click the bell in the menu bar. Capture a region around the menu. |
+| `remind-me.png` | An alert's details with the Remind Me popover open under its button: the presets with the time each means, the date and time picker. The presets depend on the hour (Later Today and This Evening are gone late in the evening). 2880 × 1590, as `update.png`. | `macos/scripts/demo.sh -NSRequiresAquaSystemAppearance YES`, wait 90 s, Home › Longest firing › `CertificateExpiringSoon`. For the second reminder in its history: ⇧⌘R, Tomorrow Morning, then `curl -X POST http://127.0.0.1:8790/demo/remind`. Then ⇧⌘R again (or the Remind Me button) for the popover, which is a window of its own: `screencapture -o -l <its window id>` captures the main window with it. |
+| `reminded.png` | An alert whose reminder came due: unread again, "Reminder 22:21" pill in the header, "Reminder set" and "Reminder" in its history. | The demo's `CertificateExpiringSoon` (eu-prod › platform) has a reminder that comes due 90 s in; open it from Home › Longest firing after that. |
 | `update.png` | The toolbar's "Update Available" pill with its popover open: version, published, size, What Changed, Skip / Later / Install and Relaunch. In the README's Updates section. 2880 × 1592: the window as high as the Mac mini's screen allows. | `macos/scripts/demo.sh -NSRequiresAquaSystemAppearance YES -simulateUpdate available`: the made-up update is found a second after launch and the popover opens by itself. Nothing is downloaded; Install and Relaunch only plays the progress. The popover is a window of its own: `screencapture -o -l <its window id>` captures the main window with it. |
 
 The coffee-break animation in the README reuses `macos/Icon/coffee-break/*-small.gif`

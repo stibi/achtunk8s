@@ -115,6 +115,7 @@ macos/scripts/run.sh                # Debug build of the working tree, started (
 macos/scripts/demo.sh               # demo mode: run.sh against demo-server.py, a fake server with made-up alerts
 curl -X POST 'http://127.0.0.1:8790/demo/fire?count=1'   # demo mode: fire new critical alerts now (/demo/resend resends one), to try notifications
 macos/scripts/demo.sh -simulateUpdate available   # demo mode with a made-up update in the toolbar (also up-to-date, tampered-update, tampered-feed, failed, translocated)
+curl -X POST http://127.0.0.1:8790/demo/remind           # demo mode: every pending reminder comes due now
 make help                           # make run, run-light, demo, install, check, test, xcode: shortcuts for the above
 swift macos/scripts/render-icon.swift   # render macos/Icon/AppIcon.svg into the app icon set
 macos/scripts/render-coffee-break.sh   # render Live's coffee-break krysa as GIFs into macos/Icon/coffee-break/

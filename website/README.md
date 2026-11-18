@@ -73,6 +73,7 @@ a placeholder. The build prints a line for each placeholder. The names follow
 | Home | `home.png` |
 | Live and unread | `live.png` |
 | One alert, with its history | `resent.png` |
+| Remind me later | `remind-me.png` |
 | Readable alerts, Copy for Agent | `alert-detail.png` |
 | Search | `search.png` (or the clip `search.mp4`) |
 | Silence | `silence.png` (or `silence.mp4`) |

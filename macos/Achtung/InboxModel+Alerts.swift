@@ -47,6 +47,31 @@ extension InboxModel {
         }
     }
 
+    /// Sets the occurrence's reminder for `date`, replacing one it has (ADR 0025), and marks
+    /// it read: it can wait until then, when the server makes it unread again for everyone.
+    /// Returns the occurrence with its reminder.
+    func remind(_ occurrence: Occurrence, at date: Date) async -> Result<Occurrence, ServerError> {
+        do throws(ServerError) {
+            let reminded = try await server.remind(occurrenceID: occurrence.id, at: date)
+            replace(reminded)
+            markRead(occurrence)
+            return .success(reminded)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    /// Cancels the occurrence's pending reminder, and returns the occurrence without it.
+    func cancelReminder(_ occurrence: Occurrence) async -> Result<Occurrence, ServerError> {
+        do throws(ServerError) {
+            let cancelled = try await server.cancelReminder(occurrenceID: occurrence.id)
+            replace(cancelled)
+            return .success(cancelled)
+        } catch {
+            return .failure(error)
+        }
+    }
+
     /// Marks the occurrences with these ids read, where the feed has them unread; any it
     /// doesn't have are older than the read baseline, so read already.
     func markRead(ids: Set<Int>) {

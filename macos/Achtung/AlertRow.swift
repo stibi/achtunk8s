@@ -1,10 +1,11 @@
 import AchtungDomain
 import SwiftUI
 
-/// One occurrence in a list. Unread ones carry a dot (a circular arrow when resent) and a
-/// bold title; read ones are grayed out. The severity icon keeps its color while the alert
-/// fires, read or not. The time is the last event (fired, resolved, reopened, resent),
-/// which is what the list is sorted by.
+/// One occurrence in a list. Unread ones carry a dot (a circular arrow when resent, an
+/// alarm when a reminder came due) and a bold title; one with a reminder pending has an
+/// alarm before its title; read ones are grayed out. The severity icon keeps its color
+/// while the alert fires, read or not. The time is the last event (fired, resolved,
+/// reopened, resent, reminded), which is what the list is sorted by.
 struct AlertRow: View {
     let occurrence: Occurrence
     let isRead: Bool
@@ -28,6 +29,11 @@ struct AlertRow: View {
                                 .foregroundStyle(.secondary)
                                 .help("Silenced in Alertmanager")
                         }
+                    }
+                    if let remindAt = occurrence.remindAt {
+                        Image(systemName: "alarm")
+                            .foregroundStyle(.secondary)
+                            .help("Reminder \(reminderTime(remindAt))")
                     }
                     Text(alert.title)
                         .font(.headline.weight(isRead ? .regular : .bold))

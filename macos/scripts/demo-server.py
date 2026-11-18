@@ -11,9 +11,14 @@ alerts only Alertmanager has (Watchdog among them), with IRM hearts in different
 silencing alerts from a tile works, and the ignored alert names, which can be edited until
 the server stops, leave alerts out of Home as the server does.
 
-For trying notifications, two endpoints outside the API make things happen now:
+Reminders (ADR 0025) can be set and cancelled until the server stops. One set before the
+start comes due 90 seconds after it (CertificateExpiringSoon), and BackupJobFailed has one
+pending for later.
+
+For trying notifications, three endpoints outside the API make things happen now:
   curl -X POST 'http://127.0.0.1:8790/demo/fire?count=1'   # new critical alerts
   curl -X POST http://127.0.0.1:8790/demo/resend           # resend the newest firing one
+  curl -X POST http://127.0.0.1:8790/demo/remind           # every pending reminder comes due
 
 The change stream (GET /api/events, ADR 0019) announces both, the occurrences changing as
 time goes by (the scenario's events, resends, repeats), silences set or ended, and edits to
@@ -160,7 +165,9 @@ STATEFUL_SET = alert(
 # Each occurrence: its alert and the events that change its state, in minutes relative to
 # the start. Events ahead of the start happen while the demo runs; an occurrence appears
 # with its first event. Resends aren't listed: like the server (ADR 0009), `events` adds
-# one for every hour an occurrence keeps firing without another event.
+# one for every hour an occurrence keeps firing without another event. Nor are reminders
+# coming due: `events` adds a `reminded` one when a ("reminder_set", minutes, due minutes)
+# comes due without a later reminder_set or reminder_cancelled before it (ADR 0025).
 SCENARIO = [
     (PAYMENTS, [("fired", -35), ("resolved", 2.5)]),
     (QUEUE, [("fired", -26 * 60), ("resolved", -25 * 60)]),
@@ -169,11 +176,11 @@ SCENARIO = [
     (CRASHLOOP, [("fired", -2 * 24 * 60), ("resolved", -2 * 24 * 60 + 25)]),
     (CRASHLOOP, [("fired", -95), ("resolved", -60)]),
     (MEMORY, [("fired", -720), ("resolved", -690)]),
-    (CERTIFICATE, [("fired", -170)]),
+    (CERTIFICATE, [("fired", -170), ("reminder_set", -160, 1.5)]),
     (DISK, [("fired", -15 * 60), ("resolved", -14 * 60)]),
     (REPLICATION, [("fired", -180), ("resolved", -150), ("reopened", -40)]),
     (CONNECTIONS, [("fired", -600), ("resolved", -560)]),
-    (BACKUP, [("fired", -380)]),
+    (BACKUP, [("fired", -380), ("reminder_set", -290, 16 * 60)]),
     (CHECKOUT_LATENCY, [("fired", 0.75)]),
     (ERRORS, [("fired", -3 * 24 * 60), ("resolved", -3 * 24 * 60 + 40)]),
     (ERRORS, [("fired", -1000), ("resolved", -980)]),
@@ -195,6 +202,9 @@ EMPTY_CHANNELS = [("us-prod", "search")]
 # known and being worked on. Alertmanager sends nothing for a silenced alert.
 SILENCED = {12: (at(-300), at(3 * 60))}
 RESEND_AFTER = datetime.timedelta(hours=1)
+# Setting or cancelling a reminder is in the history, but isn't news: it doesn't move
+# lastEventAt (ADR 0025).
+REMINDER_NOTES = ("reminder_set", "reminder_cancelled")
 
 
 def kind_of(kind):
@@ -203,20 +213,60 @@ def kind_of(kind):
     return "resolved" if kind == "vanished" else kind
 
 
+def with_reminders(scenario):
+    """The scenario's events, oldest first, as (kind, minutes, due minutes or None), with a
+    `reminded` event where a reminder came due before another replaced or cancelled it."""
+    found = []
+    due = None
+    for kind, minutes, *rest in sorted(scenario, key=lambda event: event[1]):
+        if due is not None and due <= minutes:
+            found.append(("reminded", due, None))
+            due = None
+        if kind == "reminder_set":
+            due = rest[0]
+        elif kind == "reminder_cancelled":
+            due = None
+        found.append((kind, minutes, rest[0] if rest else None))
+    if due is not None:
+        found.append(("reminded", due, None))
+    return found
+
+
 def events(occurrence_id, now):
-    """(id, kind, time) of everything recorded up to `now`, oldest first."""
-    scenario = sorted(SCENARIO[occurrence_id - 1][1], key=lambda event: event[1])
-    recorded = [(kind, at(minutes)) for kind, minutes in scenario if at(minutes) <= now]
-    if recorded and recorded[-1][0] not in ("resolved", "vanished"):
-        # Notifications arrive until the alert is silenced; each one an hour or more after
-        # the last event records a resend.
-        since, until = SILENCED.get(occurrence_id, (None, None))
-        notified_until = since if since and until > now else now
-        time = recorded[-1][1] + RESEND_AFTER
-        while time <= notified_until:
-            recorded.append(("resent", time))
+    """(id, kind, time, remindAt) of everything recorded up to `now`, oldest first."""
+    recorded = [(kind, at(minutes), at(due) if due is not None else None)
+                for kind, minutes, due in with_reminders(SCENARIO[occurrence_id - 1][1])
+                if at(minutes) <= now]
+    changes = [event for event in recorded if event[0] not in REMINDER_NOTES]
+    # Notifications arrive until the alert is silenced; while it fires, each one an hour or
+    # more after the last event records a resend. A reminder coming due is such an event:
+    # the next resend is an hour after it, and the ones before it stay.
+    since, until = SILENCED.get(occurrence_id, (None, None))
+    notified_until = since if since and until > now else now
+    firing = False
+    for n, (kind, time, _) in enumerate(changes):
+        if kind != "reminded":
+            firing = kind not in ("resolved", "vanished")
+        if not firing:
+            continue
+        last = n + 1 == len(changes)
+        end = notified_until if last else min(changes[n + 1][1], notified_until)
+        time += RESEND_AFTER
+        while time < end or (last and time == end):
+            recorded.append(("resent", time, None))
             time += RESEND_AFTER
-    return [(occurrence_id * 1000 + n, kind, time) for n, (kind, time) in enumerate(recorded)]
+    recorded.sort(key=lambda event: event[1])
+    return [(occurrence_id * 1000 + n, kind, time, due)
+            for n, (kind, time, due) in enumerate(recorded)]
+
+
+def pending_reminder(occurrence_id, now):
+    """When the occurrence's pending reminder comes due, or None."""
+    due = None
+    for _, kind, _, remind_at in events(occurrence_id, now):
+        if kind in ("reminder_set", "reminder_cancelled", "reminded"):
+            due = remind_at
+    return due
 
 
 def occurrence(occurrence_id, now):
@@ -225,9 +275,11 @@ def occurrence(occurrence_id, now):
     recorded = events(occurrence_id, now)
     if not recorded:
         return None
-    first, last = recorded[0][2], recorded[-1]
-    resolved_at = last[2] if last[1] in ("resolved", "vanished") else None
-    vanished = last[1] == "vanished"
+    changes = [event for event in recorded if event[1] not in REMINDER_NOTES]
+    state = [event for event in changes if event[1] != "reminded"][-1]
+    first, last = recorded[0][2], changes[-1]
+    resolved_at = state[2] if state[1] in ("resolved", "vanished") else None
+    vanished = state[1] == "vanished"
     since, until = SILENCED.get(occurrence_id, (None, None))
     silenced = until is not None and until > now
     notified_until = resolved_at or (min(since, now) if silenced else now)
@@ -255,11 +307,12 @@ def occurrence(occurrence_id, now):
         "startsAt": iso(first - datetime.timedelta(seconds=30)),
         "endsAt": iso(resolved_at - datetime.timedelta(minutes=5) if vanished else resolved_at),
         "firstReceivedAt": iso(first),
-        "lastReceivedAt": iso(last_received if vanished else max(last_received, last[2])),
+        "lastReceivedAt": iso(last_received if vanished else max(last_received, state[2])),
         "lastEventAt": iso(last[2]),
         "lastEventKind": kind_of(last[1]),
         # A vanished resolve came with no notification.
         "notificationCount": repeats + 1 + (1 if resolved_at and not vanished else 0),
+        "remindAt": iso(pending_reminder(occurrence_id, now)),
         "silencedUntil": iso(until) if silenced else None,
     }
 
@@ -322,8 +375,9 @@ def detail(occurrence_id, now):
             "kind": kind_of(kind),
             "cause": "vanished" if kind == "vanished" else None,
             "recordedAt": iso(time),
+            "remindAt": iso(remind_at),
         }
-        for event_id, kind, time in events(occurrence_id, now)
+        for event_id, kind, time, remind_at in events(occurrence_id, now)
     ]
     others.sort(key=lambda o: o["startsAt"], reverse=True)
     return {"occurrence": described, "events": history, "otherOccurrences": others[:20]}
@@ -649,6 +703,51 @@ def resend(now):
     return 200, {"resent": occurrence_id}
 
 
+def minutes_of(time):
+    return (time - START).total_seconds() / 60
+
+
+def set_reminder(occurrence_id, body, now):
+    if not 1 <= occurrence_id <= len(SCENARIO) or occurrence(occurrence_id, now) is None:
+        return 404, {"error": "Occurrence not found"}
+    try:
+        remind_at = datetime.datetime.fromisoformat(body.get("remindAt", ""))
+    except (TypeError, ValueError):
+        return 400, {"error": "remindAt must be a date-time with an offset"}
+    if remind_at.tzinfo is None:
+        return 400, {"error": "remindAt must be a date-time with an offset"}
+    if remind_at <= now:
+        return 400, {"error": "A reminder must be in the future"}
+    if remind_at - now > datetime.timedelta(days=365):
+        return 400, {"error": "A reminder can be at most a year ahead"}
+    SCENARIO[occurrence_id - 1][1].append(
+        ("reminder_set", minutes_of(now), minutes_of(remind_at)))
+    return 200, occurrence(occurrence_id, now)
+
+
+def cancel_reminder(occurrence_id, now):
+    if not 1 <= occurrence_id <= len(SCENARIO) or occurrence(occurrence_id, now) is None:
+        return 404, {"error": "Occurrence not found"}
+    if pending_reminder(occurrence_id, now) is not None:
+        SCENARIO[occurrence_id - 1][1].append(("reminder_cancelled", minutes_of(now)))
+    return 200, occurrence(occurrence_id, now)
+
+
+def remind_now(now):
+    """Makes every pending reminder come due now, as if its time had come."""
+    reminded = []
+    for occurrence_id in range(1, len(SCENARIO) + 1):
+        if pending_reminder(occurrence_id, now) is None:
+            continue
+        scenario = SCENARIO[occurrence_id - 1][1]
+        latest = max(
+            (n for n, event in enumerate(scenario) if event[0] == "reminder_set"),
+            key=lambda n: scenario[n][1])
+        scenario[latest] = (*scenario[latest][:2], minutes_of(now))
+        reminded.append(occurrence_id)
+    return 200, {"reminded": reminded}
+
+
 def silence(occurrence_id, body, now):
     described = occurrence(occurrence_id, now) if 1 <= occurrence_id <= len(SCENARIO) else None
     if described is None:
@@ -739,6 +838,8 @@ class DemoAPI(BaseHTTPRequestHandler):
             self.reply(*fire(max(1, min(count, 20)), now), announce="occurrences")
         elif url.path == "/demo/resend":
             self.reply(*resend(now), announce="occurrences")
+        elif url.path == "/demo/remind":
+            self.reply(*remind_now(now), announce="occurrences")
         elif bulk := re.fullmatch(r"/api/alertmanagers/([^/]+)/silences", url.path):
             self.reply(*silence_alerts(bulk.group(1), body, now), announce="silences")
         elif match:
@@ -747,17 +848,26 @@ class DemoAPI(BaseHTTPRequestHandler):
             self.reply(404, {"error": "Not found"})
 
     def do_DELETE(self):  # noqa: N802
-        match = re.fullmatch(r"/api/occurrences/(\d+)/silence", urlparse(self.path).path)
+        path = urlparse(self.path).path
+        match = re.fullmatch(r"/api/occurrences/(\d+)/silence", path)
+        reminder = re.fullmatch(r"/api/occurrences/(\d+)/reminder", path)
         now = datetime.datetime.now(datetime.timezone.utc)
-        if match:
+        if reminder:
+            self.reply(*cancel_reminder(int(reminder.group(1)), now), announce="occurrences")
+        elif match:
             self.reply(*unsilence(int(match.group(1)), now), announce="silences")
         else:
             self.reply(404, {"error": "Not found"})
 
     def do_PUT(self):  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
-        if urlparse(self.path).path == "/api/settings/ignored-alerts":
+        path = urlparse(self.path).path
+        reminder = re.fullmatch(r"/api/occurrences/(\d+)/reminder", path)
+        if path == "/api/settings/ignored-alerts":
             self.reply(*set_ignored(body), announce="settings")
+        elif reminder:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            self.reply(*set_reminder(int(reminder.group(1)), body, now), announce="occurrences")
         else:
             self.reply(404, {"error": "Not found"})
 

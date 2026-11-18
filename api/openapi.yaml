@@ -120,13 +120,21 @@ components:
             - resolved
             - reopened
             - resent
+            - reminded
           description: "What happened at lastEventAt; resent: Alertmanager repeated an
-            alert that is still firing"
+            alert that is still firing; reminded: a reminder set on it came due
+            (ADR 0025)"
         notificationCount:
           type: integer
           minimum: 0
           exclusiveMinimum: true
           maximum: 9007199254740991
+        remindAt:
+          nullable: true
+          description: When the reminder set on it comes due and resurfaces it; null when
+            none is pending (ADR 0025)
+          type: string
+          format: date-time
         silencedUntil:
           nullable: true
           description: When the Alertmanager silence muting this alert ends; null when
@@ -153,6 +161,7 @@ components:
         - lastEventAt
         - lastEventKind
         - notificationCount
+        - remindAt
         - silencedUntil
     Event:
       type: object
@@ -169,6 +178,11 @@ components:
             - resolved
             - reopened
             - resent
+            - reminded
+            - reminder_set
+            - reminder_cancelled
+          description: reminder_set and reminder_cancelled don't move the occurrence's
+            lastEventAt; reminded, when the reminder came due, does (ADR 0025)
         cause:
           nullable: true
           description: "Null when a notification caused the event. vanished: a resolve
@@ -180,11 +194,18 @@ components:
         recordedAt:
           type: string
           format: date-time
+        remindAt:
+          nullable: true
+          description: The time a reminder_set event set the reminder for; null for any
+            other kind
+          type: string
+          format: date-time
       required:
         - id
         - kind
         - cause
         - recordedAt
+        - remindAt
     OccurrenceDetail:
       type: object
       properties:
@@ -1280,6 +1301,97 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "502":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/occurrences/{id}/reminder:
+    put:
+      operationId: setOccurrenceReminder
+      summary: "Remind about the occurrence at a time: it resurfaces then"
+      tags:
+        - client
+      description: "Sets the occurrence's reminder, replacing one it has, and records
+        a reminder_set event. At remindAt the server records a reminded event,
+        which moves lastEventAt, so every client shows the occurrence as unread
+        again and notifies, whatever its state by then. There are no users, so
+        the reminder is everyone's (ADR 0002, ADR 0025). 400: remindAt is not in
+        the future, or over a year ahead."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                remindAt:
+                  type: string
+                  format: date-time
+                  description: "When to resurface the occurrence: in the future, at most a year
+                    ahead. The client turns 'tomorrow morning' into this instant
+                    in the user's time zone; the server stores instants only"
+              required:
+                - remindAt
+      parameters:
+        - schema:
+            type: integer
+            minimum: 0
+            exclusiveMinimum: true
+            maximum: 9007199254740991
+          in: path
+          name: id
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Occurrence"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: cancelOccurrenceReminder
+      summary: Cancel the occurrence's reminder
+      tags:
+        - client
+      description: Cancels the reminder pending on the occurrence and records a
+        reminder_cancelled event. Cancelling when none is pending is not an
+        error, and records nothing (ADR 0025).
+      parameters:
+        - schema:
+            type: integer
+            minimum: 0
+            exclusiveMinimum: true
+            maximum: 9007199254740991
+          in: path
+          name: id
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Occurrence"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
           description: Default Response
           content:
             application/json:

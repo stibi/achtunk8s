@@ -2,7 +2,8 @@ import Foundation
 
 /// Which occurrences a macOS notification announces (ADR 0013): a new firing or a resend
 /// (ADR 0009) after the baseline (ADR 0018), of a severity the user picked, not silenced, not read,
-/// not of an ignored alert name (ADR 0011), and each event once.
+/// not of an ignored alert name (ADR 0011), and each event once. A reminder that came due
+/// (ADR 0025) notifies whatever its severity, silence, name or state: someone asked for it.
 public struct NotificationRules: Sendable, Equatable {
     public var severities: Set<Severity>
     /// The server's ignored alert names: an alert whose alertname is one never notifies.
@@ -41,14 +42,18 @@ public struct NotificationLedger: Sendable, Equatable, Codable {
     ) -> [Occurrence] {
         feed.filter { occurrence in
             let alert = occurrence.alert
+            let isNew =
+                occurrence.lastEventAt > baseline && !readState.isRead(occurrence)
+                && !hasNotified(occurrence)
+            if occurrence.lastEventKind == .reminded {
+                return isNew
+            }
             return alert.isFiring
                 && [.fired, .reopened, .resent].contains(occurrence.lastEventKind)
-                && occurrence.lastEventAt > baseline
                 && rules.severities.contains(alert.severity)
                 && !(alert.labels["alertname"].map(rules.ignoredNames.contains) ?? false)
                 && !occurrence.isSilenced(at: now)
-                && !readState.isRead(occurrence)
-                && !hasNotified(occurrence)
+                && isNew
         }
         .sorted { $0.lastEventAt > $1.lastEventAt }
     }
@@ -152,6 +157,14 @@ public enum AlertNotificationPlan {
     /// state (ADR 0018) sets it to the newest event it sees, so it announces nothing old.
     public static func baseline(for feed: [Occurrence]) -> Date {
         feed.map(\.lastEventAt).max() ?? .distantPast
+    }
+
+    /// A notification's title: the alert's, worded as a reminder when one came due
+    /// (ADR 0025), saying when the alert has resolved since.
+    public static func title(of occurrence: Occurrence) -> String {
+        guard occurrence.lastEventKind == .reminded else { return occurrence.alert.title }
+        let resolved = occurrence.alert.isFiring ? "" : " (resolved)"
+        return "Reminder: \(occurrence.alert.title)\(resolved)"
     }
 
     public static func delivery(of occurrences: [Occurrence]) -> NotificationDelivery {

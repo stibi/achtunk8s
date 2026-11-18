@@ -4,11 +4,19 @@ import type { ChannelSlug, InstanceName } from "./channel.ts";
 type OccurrenceStatus = AlertState["status"];
 
 /**
- * Something that happened to an occurrence. Events make up an alert's history. `resent`
- * is a repeat notification for an alert still firing, counted at most once per
- * `resendQuietPeriodMs` so it resurfaces like a reminder (ADR 0009).
+ * What happened to an occurrence that is news: it moves the occurrence's `lastEventAt`,
+ * so it resurfaces. `resent` is a repeat notification for an alert still firing, counted
+ * at most once per `resendQuietPeriodMs` (ADR 0009). `reminded`: a reminder set on it
+ * came due (ADR 0025).
  */
-export type EventKind = "fired" | "resolved" | "reopened" | "resent";
+export type ChangeKind = "fired" | "resolved" | "reopened" | "resent" | "reminded";
+
+/**
+ * Something that happened to an occurrence. Events make up an alert's history. Setting
+ * and cancelling a reminder are in it too, but they aren't news: they leave
+ * `lastEventAt` alone (ADR 0025).
+ */
+export type EventKind = ChangeKind | "reminder_set" | "reminder_cancelled";
 
 /**
  * Why Achtung recorded an event that no notification caused: `vanished`, the occurrence was
@@ -28,7 +36,7 @@ export function eventFor(
   current: { readonly status: OccurrenceStatus; readonly lastEventAt: Date } | null,
   incoming: OccurrenceStatus,
   now: Date,
-): EventKind | null {
+): Exclude<ChangeKind, "reminded"> | null {
   if (current?.status === incoming) {
     const quiet = now.getTime() - current.lastEventAt.getTime() < resendQuietPeriodMs;
     // Alertmanager sends a resolved alert once; only a firing one is resent as a reminder.
@@ -52,14 +60,19 @@ export type Occurrence = IncomingAlert & {
   readonly lastReceivedAt: Date;
   /** When the last event happened. A repeat moves it only when it counts as `resent`. */
   readonly lastEventAt: Date;
-  readonly lastEventKind: EventKind;
+  readonly lastEventKind: ChangeKind;
   readonly notificationCount: number;
+  /** When the reminder pending on it comes due; null when none is (ADR 0025). */
+  readonly remindAt: Date | null;
 };
 
-export interface OccurrenceEvent {
+export type OccurrenceEvent = {
   readonly id: number;
-  readonly kind: EventKind;
   /** Null when a notification caused the event. */
   readonly cause: EventCause | null;
   readonly recordedAt: Date;
-}
+} & (
+  | { readonly kind: Exclude<EventKind, "reminder_set">; readonly remindAt: null }
+  /** The time the reminder was set for. */
+  | { readonly kind: "reminder_set"; readonly remindAt: Date }
+);

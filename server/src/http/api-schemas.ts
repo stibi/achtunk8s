@@ -11,7 +11,8 @@ import type { ChannelOverview, OccurrenceDetail } from "../services/inbox.ts";
 
 export const timestamp = z.iso.datetime({ offset: true });
 export const labelSet = z.record(z.string(), z.string());
-const eventKind = z.enum(["fired", "resolved", "reopened", "resent"]);
+const changeKind = z.enum(["fired", "resolved", "reopened", "resent", "reminded"]);
+const eventKind = z.enum([...changeKind.options, "reminder_set", "reminder_cancelled"]);
 export const severity = z.enum(["critical", "warning", "info", "unknown"]);
 
 export const errorBody = z.object({ error: z.string() }).meta({ id: "Error" });
@@ -46,10 +47,16 @@ export const occurrenceBody = z
     lastEventAt: timestamp.describe(
       "Last time it fired, resolved, reopened or was resent (at most hourly, while firing)",
     ),
-    lastEventKind: eventKind.describe(
-      "What happened at lastEventAt; resent: Alertmanager repeated an alert that is still firing",
+    lastEventKind: changeKind.describe(
+      "What happened at lastEventAt; resent: Alertmanager repeated an alert that is still firing; " +
+        "reminded: a reminder set on it came due (ADR 0025)",
     ),
     notificationCount: z.int().positive(),
+    remindAt: timestamp
+      .nullable()
+      .describe(
+        "When the reminder set on it comes due and resurfaces it; null when none is pending (ADR 0025)",
+      ),
     silencedUntil: timestamp
       .nullable()
       .describe(
@@ -61,7 +68,10 @@ export const occurrenceBody = z
 const eventBody = z
   .object({
     id: z.int().positive(),
-    kind: eventKind,
+    kind: eventKind.describe(
+      "reminder_set and reminder_cancelled don't move the occurrence's lastEventAt; " +
+        "reminded, when the reminder came due, does (ADR 0025)",
+    ),
     cause: z
       .enum(["vanished"])
       .nullable()
@@ -70,6 +80,9 @@ const eventBody = z
           "itself, because the alert was gone from its Alertmanager",
       ),
     recordedAt: timestamp,
+    remindAt: timestamp
+      .nullable()
+      .describe("The time a reminder_set event set the reminder for; null for any other kind"),
   })
   .meta({ id: "Event" });
 
@@ -110,12 +123,17 @@ export function toOccurrenceBody(occurrence: SilencedOccurrence): z.infer<typeof
     firstReceivedAt: occurrence.firstReceivedAt.toISOString(),
     lastReceivedAt: occurrence.lastReceivedAt.toISOString(),
     lastEventAt: occurrence.lastEventAt.toISOString(),
+    remindAt: occurrence.remindAt?.toISOString() ?? null,
     silencedUntil: occurrence.silencedUntil?.toISOString() ?? null,
   };
 }
 
 function toEventBody(event: OccurrenceEvent): z.infer<typeof eventBody> {
-  return { ...event, recordedAt: event.recordedAt.toISOString() };
+  return {
+    ...event,
+    recordedAt: event.recordedAt.toISOString(),
+    remindAt: event.remindAt?.toISOString() ?? null,
+  };
 }
 
 export function toOccurrenceDetailBody(

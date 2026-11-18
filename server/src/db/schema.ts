@@ -35,7 +35,15 @@ export const channels = pgTable(
 
 export const occurrenceStatus = pgEnum("occurrence_status", ["firing", "resolved"]);
 export const severity = pgEnum("severity", ["critical", "warning", "info", "unknown"]);
-export const eventKind = pgEnum("event_kind", ["fired", "resolved", "reopened", "resent"]);
+export const eventKind = pgEnum("event_kind", [
+  "fired",
+  "resolved",
+  "reopened",
+  "resent",
+  "reminder_set",
+  "reminder_cancelled",
+  "reminded",
+]);
 // Why Achtung recorded an event itself, rather than because a notification said so.
 export const eventCause = pgEnum("event_cause", ["vanished"]);
 
@@ -111,13 +119,38 @@ export const events = pgTable(
     // its Alertmanager no longer had it (ADR 0014).
     cause: eventCause(),
     recordedAt: timestamptz().notNull(),
+    // The time a `reminder_set` event set the reminder for (ADR 0025); null otherwise.
+    remindAt: timestamptz(),
   },
   (table) => [
     index("events_occurrence_id").on(table.occurrenceId),
     // The home view counts the last day's events (noisiest alerts). Without it, every
     // refresh would scan the whole history, which only grows.
     index("events_recorded_at").on(table.recordedAt),
+    // Compared as text: a new enum value can't be used in the transaction that adds it,
+    // and the migration that added `reminder_set` also adds this.
+    check(
+      "events_remind_at_matches_kind",
+      sql`(${table.kind}::text = 'reminder_set') = (${table.remindAt} is not null)`,
+    ),
   ],
+);
+
+/**
+ * The reminder pending on an occurrence (ADR 0025): at `remindAt` the server records a
+ * `reminded` event, which resurfaces it, and deletes the row. One per occurrence: setting
+ * another replaces it. Shared by every client, as there are no users (ADR 0002).
+ */
+export const reminders = pgTable(
+  "reminders",
+  {
+    occurrenceId: bigint({ mode: "number" })
+      .primaryKey()
+      .references(() => occurrences.id),
+    remindAt: timestamptz().notNull(),
+  },
+  // The sweep finds the due ones by time.
+  (table) => [index("reminders_remind_at").on(table.remindAt)],
 );
 
 /**

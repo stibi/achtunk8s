@@ -87,6 +87,10 @@ private struct EventRow: View {
         Label {
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(event.kind.title) \(exactDateTime(event.recordedAt))")
+                if let remindAt = event.remindAt {
+                    Text("For \(exactDateTime(remindAt))")
+                        .foregroundStyle(.secondary)
+                }
                 if vanished {
                     Text("Gone from Alertmanager")
                         .foregroundStyle(.secondary)
@@ -133,6 +137,9 @@ extension OccurrenceEvent.Kind {
         case .resolved: "Resolved"
         case .reopened: "Reopened"
         case .resent: "Resent"
+        case .reminderSet: "Reminder set"
+        case .reminderCancelled: "Reminder cancelled"
+        case .reminded: "Reminder"
         }
     }
 
@@ -142,6 +149,9 @@ extension OccurrenceEvent.Kind {
         case .resolved: "checkmark.circle.fill"
         case .reopened: "arrow.uturn.backward.circle.fill"
         case .resent: "arrow.clockwise.circle.fill"
+        case .reminderSet: "alarm"
+        case .reminderCancelled: "xmark.circle"
+        case .reminded: "alarm.fill"
         }
     }
 
@@ -150,7 +160,8 @@ extension OccurrenceEvent.Kind {
         // Red stays reserved for critical severity.
         case .fired, .reopened: .primary
         case .resolved: .green
-        case .resent: .secondary
+        case .resent, .reminderSet, .reminderCancelled: .secondary
+        case .reminded: .primary
         }
     }
 }

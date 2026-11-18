@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { IncomingAlert } from "../domain/alert.ts";
 import type { ChannelRef } from "../domain/channel.ts";
-import type { EventCause, EventKind } from "../domain/occurrence.ts";
+import type { ChangeKind, EventCause } from "../domain/occurrence.ts";
 import type { Transaction } from "./client.ts";
 import { channels, events, occurrences } from "./schema.ts";
 
@@ -125,10 +125,11 @@ export async function updateOccurrence(
     .where(eq(occurrences.id, id));
 }
 
+/** Records news about the occurrence, which moves its `lastEventAt`, so it resurfaces. */
 export async function recordEvent(
   tx: Transaction,
   occurrenceId: number,
-  kind: EventKind,
+  kind: ChangeKind,
   now: Date,
   cause: EventCause | null = null,
 ): Promise<void> {

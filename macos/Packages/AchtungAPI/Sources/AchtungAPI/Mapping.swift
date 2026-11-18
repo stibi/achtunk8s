@@ -33,7 +33,8 @@ extension Components.Schemas.Occurrence {
             lastEventAt: lastEventAt,
             lastEventKind: lastEventKind.domain,
             notificationCount: notificationCount,
-            silencedUntil: silencedUntil)
+            silencedUntil: silencedUntil,
+            remindAt: remindAt)
     }
 
     /// The spec promises `endsAt` is set exactly when the status is resolved.
@@ -82,7 +83,9 @@ extension Components.Schemas.Occurrence.LinksPayloadPayload.KindPayload {
 
 extension Components.Schemas.Event {
     var domain: OccurrenceEvent {
-        OccurrenceEvent(id: id, kind: kind.domain, cause: cause?.domain, recordedAt: recordedAt)
+        OccurrenceEvent(
+            id: id, kind: kind.domain, cause: cause?.domain, recordedAt: recordedAt,
+            remindAt: remindAt)
     }
 }
 
@@ -101,6 +104,9 @@ extension Components.Schemas.Event.KindPayload {
         case .resolved: .resolved
         case .reopened: .reopened
         case .resent: .resent
+        case .reminded: .reminded
+        case .reminderSet: .reminderSet
+        case .reminderCancelled: .reminderCancelled
         }
     }
 }
@@ -112,6 +118,7 @@ extension Components.Schemas.Occurrence.LastEventKindPayload {
         case .resolved: .resolved
         case .reopened: .reopened
         case .resent: .resent
+        case .reminded: .reminded
         }
     }
 }

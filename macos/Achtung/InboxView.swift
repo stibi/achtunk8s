@@ -54,6 +54,10 @@ struct InboxView: View {
         .modifier(
             InboxSearch(model: model, query: $query, active: $activeSearch)
         )
+        .environment(
+            \.reminders,
+            ReminderActions(model) { if revealed?.id == $0.id { revealed = $0 } }
+        )
         // A channel that moved to another instance (ADR 0006) has a new identity; leave the
         // old one for Live rather than asking the server for it every refresh.
         .onChange(of: model.channels) {

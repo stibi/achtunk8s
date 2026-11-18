@@ -34,6 +34,7 @@ describe("migrateDatabase", () => {
       "events",
       "ignored_alert_names",
       "occurrences",
+      "reminders",
     ]);
   });
 
