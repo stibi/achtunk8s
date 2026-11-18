@@ -71,6 +71,8 @@ struct AlertDetails: View {
     var events: [OccurrenceEvent]?
     /// ⇧⌘C copies: only in the detail pane, where one alert is shown.
     var hasCopyShortcut = false
+    /// Collapses a Live card when its header is clicked; nil in the detail pane.
+    var collapse: (() -> Void)?
 
     private var alert: IncomingAlert { occurrence.alert }
 
@@ -78,9 +80,7 @@ struct AlertDetails: View {
         VStack(alignment: .leading, spacing: 24) {
             SilenceState(occurrence: occurrence) { isSilenced in
                 VStack(alignment: .leading, spacing: 20) {
-                    AlertHeader(
-                        alert: alert, silencedUntil: isSilenced ? occurrence.silencedUntil : nil,
-                        resentAt: occurrence.isResent ? occurrence.lastEventAt : nil)
+                    header(isSilenced: isSilenced)
                     AlertProse(alert: alert)
                     FlowLayout(spacing: 8) {
                         AlertLinkButtons(alert: alert)
@@ -102,53 +102,104 @@ struct AlertDetails: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    private func header(isSilenced: Bool) -> some View {
+        AlertHeader(
+            alert: alert, silencedUntil: isSilenced ? occurrence.silencedUntil : nil,
+            resentAt: occurrence.isResent ? occurrence.lastEventAt : nil, collapse: collapse)
+    }
 }
 
 private struct AlertHeader: View {
     let alert: IncomingAlert
     let silencedUntil: Date?
     let resentAt: Date?
+    /// Collapses a Live card on a click on the icon, title or status; the times stay
+    /// selectable.
+    let collapse: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            Image(systemName: alert.severity.symbolName)
-                .font(.system(size: 26))
-                .foregroundStyle(.white)
-                .frame(width: 52, height: 52)
-                .background(alert.severity.color.gradient, in: .rect(cornerRadius: 12))
+            SeverityIcon(severity: alert.severity)
+                .collapsing(collapse)
             VStack(alignment: .leading, spacing: 8) {
                 Text(alert.title)
                     .font(.title.bold())
+                    .collapsing(collapse)
                 HStack(spacing: 8) {
-                    StatusPill(alert: alert)
-                    if let resentAt {
-                        ResentPill(date: resentAt)
-                    }
-                    if let silencedUntil {
-                        SilencedPill(until: silencedUntil)
-                    }
-                    Text(alert.severity.rawValue.capitalized)
-                        .foregroundStyle(alert.severity.color)
-                    RelativeTime(date: alert.startsAt)
-                        .foregroundStyle(.secondary)
+                    AlertStatus(alert: alert, silencedUntil: silencedUntil, resentAt: resentAt)
                 }
                 .font(.callout)
-                Text(absoluteTimes)
+                .collapsing(collapse)
+                Text(alert.times())
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
         }
     }
+}
 
-    /// Exact times, for triage; the relative time above is for scanning.
-    private var absoluteTimes: String {
-        let started = "Started \(alert.startsAt.formatted(date: .abbreviated, time: .shortened))"
-        switch alert.state {
+extension View {
+    /// Calls `collapse`, if there is one, on a click anywhere in the view.
+    @ViewBuilder fileprivate func collapsing(_ collapse: (() -> Void)?) -> some View {
+        if let collapse {
+            contentShape(.rect).onTapGesture(perform: collapse)
+        } else {
+            self
+        }
+    }
+}
+
+/// The alert's severity as a large white symbol on its colour, leading its header.
+struct SeverityIcon: View {
+    let severity: Severity
+
+    var body: some View {
+        Image(systemName: severity.symbolName)
+            .font(.system(size: 26))
+            .foregroundStyle(.white)
+            .frame(width: 52, height: 52)
+            .background(severity.color.gradient, in: .rect(cornerRadius: 12))
+    }
+}
+
+/// The line under an alert's title: its status, resend and silence, severity and, unless
+/// left out for room, how long ago it started. No container of its own, so a row or a
+/// flow can hold it.
+struct AlertStatus: View {
+    let alert: IncomingAlert
+    let silencedUntil: Date?
+    let resentAt: Date?
+    var showsAge = true
+
+    var body: some View {
+        StatusPill(alert: alert)
+        if let resentAt {
+            ResentPill(date: resentAt)
+        }
+        if let silencedUntil {
+            SilencedPill(until: silencedUntil)
+        }
+        Text(alert.severity.rawValue.capitalized)
+            .foregroundStyle(alert.severity.color)
+        if showsAge {
+            RelativeTime(date: alert.startsAt)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+extension IncomingAlert {
+    /// When it started and, once resolved, ended: exact times for triage, beside the
+    /// relative time that is for scanning.
+    func times(_ format: (Date) -> String = exactDateTime) -> String {
+        let started = "Started \(format(startsAt))"
+        switch state {
         case .firing:
             return started
         case .resolved(let endsAt):
-            return "\(started) · Resolved \(endsAt.formatted(date: .abbreviated, time: .shortened))"
+            return "\(started) · Resolved \(format(endsAt))"
         }
     }
 }

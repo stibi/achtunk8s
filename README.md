@@ -130,13 +130,15 @@ instead of the dot, and can notify again.
 
 ## Unread, Live and the timeline
 
-![Live in the macOS app: alert cards from every channel, newest change first, beside a 24-hour timeline with a marker where each alert fired and resolved, coloured by severity](docs/media/live.png)
+![Live in the macOS app: one-line alert cards from every channel, newest change first, one of them open with all its details, beside a 24-hour timeline with a marker where each alert fired and resolved, coloured by severity](docs/media/live.png)
 
 The sidebar groups channels under their instance, with unread and unread-critical
 badges. Channels and Live show only unread alerts by default, until you switch
 "Unread only" off for that list. Mark All as Read (⇧⌘K) clears a list without moving any
 baseline, so a later change stays unread. Live puts every channel in one stream next to a
-timeline of the last 24 hours. When it is all caught up, the app's rat takes a coffee
+timeline of the last 24 hours. Its cards are one line each until you open one; opening it
+marks it read and closes the one before, so clicking (or ↓ and Return) down the stream
+clears it. When it is all caught up, the app's rat takes a coffee
 break:
 
 <picture>

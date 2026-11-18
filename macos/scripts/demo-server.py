@@ -54,7 +54,9 @@ DESCRIPTIONS = {
 def alert(key, instance, channel, severity, title, summary, service, namespace="prod"):
     cluster = f"{instance}-1"
     slug = title.lower()
-    annotations = {"summary": summary, "runbook_url": f"https://runbooks.example.com/{slug}"}
+    annotations = {"runbook_url": f"https://runbooks.example.com/{slug}"}
+    if summary is not None:
+        annotations = {"summary": summary, **annotations}
     if title in DESCRIPTIONS:
         annotations["description"] = DESCRIPTIONS[title]
         annotations["impact"] = "Customers see errors; on-call is paged."
@@ -139,6 +141,14 @@ FLAKY = alert(
 RUNNER = alert(
     "c2", "staging", "ci", "warning", "BuildRunnerOffline",
     "Build runner mac-runner-2 hasn't checked in for 15 minutes.", "ci-runners", "ci")
+# A long name with a long summary, and one without a summary, for Live's collapsed cards.
+REMOTE_WRITE = alert(
+    "c3", "staging", "ci", "warning", "PrometheusRemoteWriteDesiredShards",
+    "Prometheus monitoring/k8s wants to run 48 remote write shards for queue thanos-receive, "
+    "more than its maximum of 32.", "prometheus", "monitoring")
+STATEFUL_SET = alert(
+    "c4", "staging", "ci", "info", "KubeStatefulSetUpdateNotRolledOut", None, "build-cache",
+    "ci")
 
 # Each occurrence: its alert and the events that change its state, in minutes relative to
 # the start. Events ahead of the start happen while the demo runs; an occurrence appears
@@ -168,6 +178,9 @@ SCENARIO = [
     (REPLICAS, [("fired", -900), ("resolved", -860)]),
     (FLAKY, [("fired", -120), ("resolved", -100)]),
     (RUNNER, [("fired", -30)]),
+    # Over a day ago, so Home and the timeline don't show them.
+    (REMOTE_WRITE, [("fired", -27 * 60), ("resolved", -26 * 60)]),
+    (STATEFUL_SET, [("fired", -28 * 60), ("resolved", -27 * 60)]),
 ]
 # A channel with nothing in it yet, as a new receiver URL would create.
 EMPTY_CHANNELS = [("us-prod", "search")]
