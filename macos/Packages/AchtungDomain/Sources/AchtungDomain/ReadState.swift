@@ -126,6 +126,13 @@ public struct ReadState: Sendable, Codable, Equatable {
         return occurrence.lastEventAt > seenUntil
     }
 
+    /// A list in the order the user reads it: what changed since they last left the app,
+    /// above the "new" divider, then the rest, each in the list's own order.
+    public func newFirst(_ occurrences: [Occurrence]) -> (new: [Occurrence], earlier: [Occurrence])
+    {
+        (occurrences.filter { isNew($0) }, occurrences.filter { !isNew($0) })
+    }
+
     /// The user is looking at `channel` as the server last described it.
     public mutating func markVisited(_ channel: Channel) {
         guard let lastEventAt = channel.lastEventAt else { return }

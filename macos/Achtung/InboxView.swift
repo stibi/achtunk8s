@@ -17,8 +17,8 @@ struct InboxView: View {
     /// An occurrence opened from Home, selected in its channel even if neither the list's
     /// loaded pages nor the feed hold it; let go once the selection moves on.
     @State var revealed: Occurrence?
-    /// Live's card the user last clicked (`LiveView.kept`), here so marking all read can
-    /// let it go.
+    /// Live's expanded card (`LiveView.kept`), here so it stays expanded when the user
+    /// comes back to Live, and so marking all read can let it go.
     @State private var liveKept: Int?
     /// A channel just opened whose first unread occurrence is still to be selected, after
     /// its first refresh.

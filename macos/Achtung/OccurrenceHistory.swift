@@ -17,8 +17,8 @@ struct OccurrenceFacts: View {
 func deliveryFacts(of occurrence: Occurrence) -> [(name: String, value: String)] {
     [
         ("Notifications", occurrence.notificationCount.formatted()),
-        ("First received", exact(occurrence.firstReceivedAt)),
-        ("Last received", exact(occurrence.lastReceivedAt)),
+        ("First received", exactDateTime(occurrence.firstReceivedAt)),
+        ("Last received", exactDateTime(occurrence.lastReceivedAt)),
     ]
 }
 
@@ -65,7 +65,7 @@ struct OccurrenceHistory: View {
                     ForEach(detail.otherOccurrences) { other in
                         HStack(spacing: 8) {
                             StatusPill(alert: other.alert)
-                            Text("Started \(exact(other.alert.startsAt))")
+                            Text("Started \(exactDateTime(other.alert.startsAt))")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }
@@ -86,7 +86,7 @@ private struct EventRow: View {
     var body: some View {
         Label {
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(event.kind.title) \(exact(event.recordedAt))")
+                Text("\(event.kind.title) \(exactDateTime(event.recordedAt))")
                 if vanished {
                     Text("Gone from Alertmanager")
                         .foregroundStyle(.secondary)
@@ -121,7 +121,8 @@ private struct VanishedHelp: ViewModifier {
     }
 }
 
-private func exact(_ date: Date) -> String {
+/// A date and time in full, for facts and triage.
+func exactDateTime(_ date: Date) -> String {
     date.formatted(date: .abbreviated, time: .shortened)
 }
 
