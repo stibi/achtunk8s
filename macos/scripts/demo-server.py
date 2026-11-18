@@ -15,14 +15,21 @@ For trying notifications, two endpoints outside the API make things happen now:
   curl -X POST 'http://127.0.0.1:8790/demo/fire?count=1'   # new critical alerts
   curl -X POST http://127.0.0.1:8790/demo/resend           # resend the newest firing one
 
+The change stream (GET /api/events, ADR 0019) announces both, the occurrences changing as
+time goes by (the scenario's events, resends, repeats), silences set or ended, and edits to
+the ignored alert names.
+
 Usage: python3 demo-server.py [port]   (macos/scripts/demo.sh starts it with the app)
 """
 
 import base64
 import datetime
 import json
+import queue
 import re
 import sys
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -661,10 +668,66 @@ def unsilence(occurrence_id, now):
     return 200, occurrence(occurrence_id, now)
 
 
+STREAMS = []  # a queue per open change stream
+STREAMS_LOCK = threading.Lock()
+KEEPALIVE_SECONDS = 20
+
+
+def publish(kind):
+    """Tells every open change stream that `kind` changed."""
+    with STREAMS_LOCK:
+        for stream in STREAMS:
+            stream.put(kind)
+
+
+def announce_occurrences():
+    """Announces the occurrences changing as time goes by, as ingesting would: the
+    scenario's events as their time comes, resends, and repeated notifications."""
+    def state():
+        now = datetime.datetime.now(datetime.timezone.utc)
+        return [(o["id"], o["lastEventAt"], o["lastReceivedAt"]) for o in occurrences(now)]
+
+    last = state()
+    while True:
+        time.sleep(1)
+        current = state()
+        if current != last:
+            last = current
+            publish("occurrences")
+
+
 class DemoAPI(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802 (http.server's naming)
         url = urlparse(self.path)
+        if url.path == "/api/events":
+            self.stream_changes()
+            return
         self.reply(*get(url.path, parse_qs(url.query), datetime.datetime.now(datetime.timezone.utc)))
+
+    def stream_changes(self):
+        """The change stream, open until the client goes. Each request has its own thread,
+        so an open stream holds up nothing else."""
+        changes = queue.Queue()
+        with STREAMS_LOCK:
+            STREAMS.append(changes)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(b"retry: 5000\nevent: ready\ndata: {}\n\n")
+            while True:
+                try:
+                    kind = changes.get(timeout=KEEPALIVE_SECONDS)
+                except queue.Empty:
+                    self.wfile.write(b": keepalive\n\n")
+                    continue
+                self.wfile.write(f"event: changed\ndata: {json.dumps({'kind': kind})}\n\n".encode())
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # the client went
+        finally:
+            with STREAMS_LOCK:
+                STREAMS.remove(changes)
 
     def do_POST(self):  # noqa: N802
         url = urlparse(self.path)
@@ -673,36 +736,47 @@ class DemoAPI(BaseHTTPRequestHandler):
         now = datetime.datetime.now(datetime.timezone.utc)
         if url.path == "/demo/fire":
             count = int(parse_qs(url.query).get("count", ["1"])[0])
-            self.reply(*fire(max(1, min(count, 20)), now))
+            self.reply(*fire(max(1, min(count, 20)), now), announce="occurrences")
         elif url.path == "/demo/resend":
-            self.reply(*resend(now))
+            self.reply(*resend(now), announce="occurrences")
         elif bulk := re.fullmatch(r"/api/alertmanagers/([^/]+)/silences", url.path):
-            self.reply(*silence_alerts(bulk.group(1), body, now))
+            self.reply(*silence_alerts(bulk.group(1), body, now), announce="silences")
+        elif match:
+            self.reply(*silence(int(match.group(1)), body, now), announce="silences")
         else:
-            self.reply(*(silence(int(match.group(1)), body, now) if match else (404, {"error": "Not found"})))
+            self.reply(404, {"error": "Not found"})
 
     def do_DELETE(self):  # noqa: N802
         match = re.fullmatch(r"/api/occurrences/(\d+)/silence", urlparse(self.path).path)
         now = datetime.datetime.now(datetime.timezone.utc)
-        self.reply(*(unsilence(int(match.group(1)), now) if match else (404, {"error": "Not found"})))
+        if match:
+            self.reply(*unsilence(int(match.group(1)), now), announce="silences")
+        else:
+            self.reply(404, {"error": "Not found"})
 
     def do_PUT(self):  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         if urlparse(self.path).path == "/api/settings/ignored-alerts":
-            self.reply(*set_ignored(body))
+            self.reply(*set_ignored(body), announce="settings")
         else:
             self.reply(404, {"error": "Not found"})
 
-    def reply(self, status, payload):
+    def reply(self, status, payload, announce=None):
+        """Answers, then announces `announce` on the change stream if the request did
+        something. Like the server, a silence that failed is announced too: Alertmanager may
+        have taken part of it."""
         data = json.dumps(payload).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+        if announce and status != 404 and (status < 400 or announce == "silences"):
+            publish(announce)
 
     def log_message(self, *args):
         pass  # quiet: the demo's terminal shows only what demo.sh prints
 
 
+threading.Thread(target=announce_occurrences, daemon=True).start()
 ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1]) if len(sys.argv) > 1 else 8790), DemoAPI).serve_forever()

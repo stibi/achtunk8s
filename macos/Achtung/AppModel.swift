@@ -49,6 +49,11 @@ final class AppModel {
     private let notifier = AlertNotifier()
     private let defaults: UserDefaults
     private var poller: Task<Void, Never>?
+    /// The server's change stream (ADR 0019); the poll slows down while it's live.
+    @ObservationIgnored var changeStream: ChangeStream?
+    /// The refresh under way (`requestRefresh`), and whether another was asked for during it.
+    @ObservationIgnored var refreshing: Task<Void, Never>?
+    @ObservationIgnored var refreshAgain = false
     /// The connection's baseline and what it announced (`AlertNotificationState`), saved
     /// per server after each refresh (ADR 0018).
     private var notifications = AlertNotificationState()
@@ -82,6 +87,11 @@ final class AppModel {
     func connect(to url: URL?) {
         guard inbox?.baseURL != url else { return }
         poller?.cancel()
+        changeStream?.stop()
+        changeStream = nil
+        refreshing?.cancel()
+        refreshing = nil
+        refreshAgain = false
         notifications = AlertNotificationState()
         ignoredNamesRead = nil
         ignoredNames = []
@@ -100,6 +110,7 @@ final class AppModel {
         }
         self.inbox = inbox
         poller = Task { [weak self] in await self?.poll() }
+        startChangeStream(for: inbox)
         Task { await requestAuthorizationIfOn() }
     }
 
@@ -139,14 +150,14 @@ final class AppModel {
 
     // MARK: - Refreshing
 
-    /// Every 30 seconds, with or without a window. A window's own refresh (opening a list,
-    /// coming back to the app) counts, so this skips a refresh that just happened.
+    /// Every 30 seconds, with or without a window; about every 2 minutes while the change
+    /// stream is live. A window's own refresh (opening a list, coming back to the app) and
+    /// one the stream asked for count, so this skips a refresh that just happened.
     private func poll() async {
         while !Task.isCancelled {
-            if let inbox, inbox.lastUpdated.map({ Date.now.timeIntervalSince($0) > 20 }) ?? true {
-                await refreshIgnoredNames()
-                let scope = inbox.activeScope
-                await inbox.refresh(scope, visiting: NSApp.isActive && scope != nil)
+            let age = ChangeStreamSchedule.pollAge(isLive: changeStream?.isLive == true)
+            if let inbox, inbox.lastUpdated.map({ Date.now.timeIntervalSince($0) > age }) ?? true {
+                requestRefresh(of: inbox)
             }
             do {
                 try await Task.sleep(for: Self.refreshInterval)
@@ -156,7 +167,7 @@ final class AppModel {
         }
     }
 
-    private func refreshIgnoredNames() async {
+    func refreshIgnoredNames() async {
         guard let inbox,
             ignoredNamesRead.map({ Date.now.timeIntervalSince($0) > Self.ignoredNamesAge }) ?? true
         else { return }

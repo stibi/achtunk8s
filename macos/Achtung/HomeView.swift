@@ -72,11 +72,12 @@ struct HomeView: View {
                     Task { await model.homeModel.refreshHome() }
                 }
             }
-            // The counts follow a change to the ignored alert names at once.
+            // The counts follow a change to the ignored alert names, alerts or silences at once.
             .onReceive(
                 NotificationCenter.default.publisher(for: .ignoredAlertNamesChanged)
+                    .merge(with: NotificationCenter.default.publisher(for: .alertsChanged))
             ) { notification in
-                if notification.ignoredAlertNamesServer == model.baseURL {
+                if notification.changedServer == model.baseURL {
                     Task { await model.homeModel.refreshHome() }
                 }
             }

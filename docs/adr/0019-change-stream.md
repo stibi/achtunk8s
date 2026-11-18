@@ -45,6 +45,7 @@ only at its next poll. The architecture planned Server-Sent Events from the star
 - A new alert reaches a connected client within its debounce, not up to 30 s later.
 - The gateway in front of Achtung must not time a stream out. Envoy's default route
   timeout is 15 s, so the route needs `timeouts.request: 0s` for `/api/events` (a
-  deployment change). Without it, clients reconnect every 15 s and still work.
+  deployment change). Without it, clients reconnect every 15 s and still work, but each
+  reconnect re-reads everything, so a client reads more often than its old 30 s poll.
 - Every client re-reads after each change. At alert volume this is a few reads per
   minute per client; the 30 s caches of Alertmanager reads keep it off Alertmanager.

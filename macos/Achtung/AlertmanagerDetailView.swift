@@ -93,11 +93,13 @@ struct AlertmanagerDetailView: View {
             .onChange(of: alerts) {
                 selection.formIntersection(selectable)
             }
-            // An ignored name leaves the list at once, wherever it was added.
+            // An ignored name leaves the list at once, wherever it was added; a new alert or a
+            // silence set elsewhere through Achtung shows too.
             .onReceive(
                 NotificationCenter.default.publisher(for: .ignoredAlertNamesChanged)
+                    .merge(with: NotificationCenter.default.publisher(for: .alertsChanged))
             ) { notification in
-                if notification.ignoredAlertNamesServer == model.baseURL {
+                if notification.changedServer == model.baseURL {
                     Task { await model.homeModel.refreshAlerts(of: instance) }
                 }
             }

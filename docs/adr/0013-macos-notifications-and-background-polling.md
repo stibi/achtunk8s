@@ -20,7 +20,9 @@ There is no server push yet (ADR 0001), so whatever notifies has to poll.
   no way to reach a Mac. An app-level `AppModel` owns the server connection
   (`InboxModel`) and refreshes it every 30 seconds whether or not a window is open; the
   window reads the model and only says which list it shows. Opening a list and coming
-  back to the app still refresh at once.
+  back to the app still refresh at once. (Superseded in part by ADR 0019: while the
+  server's change stream is open, a change is read at once and the poll slows to about
+  2 minutes.)
 - **Closing the last window doesn't quit.** Achtung stays in the menu bar (a
   `MenuBarExtra`): a bell with the count of unread, unsilenced, not ignored firing
   critical alerts, the newest five of them, Mark Critical Alerts as Read, Pause

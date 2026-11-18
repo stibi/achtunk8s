@@ -39,7 +39,7 @@ struct IgnoredAlertsSettings: View {
         // Changed from an Alertmanager's detail: show the server's list. A save here has
         // set the list already.
         .onReceive(NotificationCenter.default.publisher(for: .ignoredAlertNamesChanged)) {
-            if $0.ignoredAlertNamesServer == baseURL, $0.object as? IgnoredAlertsModel !== model {
+            if $0.changedServer == baseURL, $0.object as? IgnoredAlertsModel !== model {
                 Task { await model.reload() }
             }
         }
