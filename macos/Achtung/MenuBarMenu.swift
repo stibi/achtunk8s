@@ -83,6 +83,7 @@ struct MenuBarMenu: View {
                 }
             }
         }
+        CheckForUpdatesButton()
         // Activated first, or Settings could open behind the app in front.
         Button("Settings…") {
             NSApp.activate()

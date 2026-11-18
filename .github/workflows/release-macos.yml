@@ -1,0 +1,180 @@
+name: Release macOS
+
+# Publishes the macOS client's build of main to https://updates.achtunk8s.io/tip/, where
+# installed copies find it ("Check for Updates…", ADR 0021). Setup and the secrets:
+# infra/README.md, "App updates".
+#
+# Two jobs on two machines. `build` runs third-party code (SwiftPM build plugins, Homebrew
+# tools) and has no secrets. `publish` has the signing key and the bucket's keys, and runs
+# only this repository's scripts, Sparkle's sign_update and the AWS CLI: it reads the
+# build's archive and never executes anything from it.
+#
+# A run that fails after the feed was uploaded has published its build. Running it again
+# stops at "isn't newer than build N", as it should; the next release tidies up after it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - macos/**
+      - api/openapi.yaml
+      - .github/workflows/release-macos.yml
+  # Builds main's head. Any other ref is refused in the build job, and, whatever a branch
+  # does to this file, by the environment `release`, which only main may use.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# bash -eo pipefail: a failed command in a pipe fails the step.
+defaults:
+  run:
+    shell: bash
+
+# One release at a time. A running one is never cancelled; a waiting one is replaced by a
+# newer push, so the latest commit ends up published.
+concurrency:
+  group: release-macos
+  cancel-in-progress: false
+
+env:
+  # Compiled into every installed copy (ACHTUNG_UPDATE_FEED_URL in macos/project.yml).
+  FEED_URL: https://updates.achtunk8s.io/tip/appcast.xml
+
+jobs:
+  build:
+    name: Check and build
+    # macos-latest has only Xcode 26, which can't target macOS 27. See ADR 0004.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - name: Only main is released
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases are built from main, not from $GITHUB_REF."
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The build number is the commit count.
+          fetch-depth: 0
+          persist-credentials: false
+      - run: sudo xcode-select --switch /Applications/Xcode_27.2.app
+      - run: brew install xcodegen swiftlint periphery
+      - run: macos/scripts/check.sh
+      - name: Build
+        run: |
+          # A changed tree would be released as "<hash>-dirty", which publish refuses.
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::The check changed tracked files:"
+            git status --short
+            exit 1
+          fi
+          app=$(macos/scripts/build-release.sh)
+          ditto -c -k --keepParent "$app" Achtung.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: achtung-release
+          path: Achtung.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Sign and publish
+    needs: build
+    # A fresh machine: Sparkle's tools are macOS binaries, but nothing is built here.
+    runs-on: macos-latest
+    timeout-minutes: 15
+    # Limited to main (infra/github.tf). It holds every secret used below.
+    environment: release
+    env:
+      # The app's Sparkle version (macos/project.yml), and the SHA-256 of its release
+      # archive on github.com/sparkle-project/Sparkle. Change all three together.
+      SPARKLE_VERSION: 2.10.1
+      SPARKLE_SHA256: 1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27
+      BUCKET: achtunk8s-updates
+      # R2 through its S3 API. It has one region, and it doesn't take the checksums newer
+      # AWS CLIs add to every request by default.
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: achtung-release
+          path: release
+      - name: Sparkle's sign_update
+        run: |
+          grep -q "exactVersion: $SPARKLE_VERSION\$" macos/project.yml
+          curl -fsSL --retry 3 -o Sparkle.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
+          echo "$SPARKLE_SHA256  Sparkle.tar.xz" | shasum -a 256 -c -
+          mkdir sparkle
+          tar -xJf Sparkle.tar.xz -C sparkle ./bin/sign_update
+      - name: Fetch the published feed
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.UPDATES_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATES_R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          mkdir feed
+          # Listed, not fetched and hoped for: a failed download must never look like the
+          # first release.
+          count=$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix tip/appcast.xml \
+            --query "length(Contents || \`[]\`)" --output text)
+          case "$count" in
+            0) echo "FIRST_RELEASE=1" >> "$GITHUB_ENV" ;;
+            1) aws s3 cp --only-show-errors "s3://$BUCKET/tip/appcast.xml" feed/appcast.xml ;;
+            *) echo "::error::Unexpected listing of tip/appcast.xml: $count"; exit 1 ;;
+          esac
+      - name: Sign
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          COMMIT: ${{ github.sha }}
+          SIGN_UPDATE: sparkle/bin/sign_update
+        run: |
+          # On stdin only: the script and what it starts don't get it in their environment.
+          printf '%s\n' "$SPARKLE_ED_PRIVATE_KEY" |
+            env -u SPARKLE_ED_PRIVATE_KEY macos/scripts/sign-release.sh release/Achtung.zip feed
+      - name: Upload
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.UPDATES_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATES_R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          archive=$(basename feed/Achtung-*.zip)
+          upload() { aws s3 cp --only-show-errors "$@"; }
+          # The feed goes last: until then installed copies see the previous release whole.
+          upload "feed/$archive" "s3://$BUCKET/tip/$archive" \
+            --content-type application/zip --cache-control "public, max-age=31536000, immutable"
+          upload "feed/$archive" "s3://$BUCKET/tip/Achtung-latest.zip" \
+            --content-type application/zip --cache-control no-cache
+          upload feed/appcast.xml "s3://$BUCKET/tip/appcast.xml" \
+            --content-type application/xml --cache-control no-cache
+
+          # Archives the feed no longer lists. Only numbered archives are ever named.
+          aws s3api list-objects-v2 --bucket "$BUCKET" --prefix tip/ --output json |
+            python3 -B macos/scripts/appcast.py stale feed/appcast.xml release/Achtung.zip > stale.txt
+          while IFS= read -r key; do
+            echo "Deleting $key"
+            aws s3api delete-object --bucket "$BUCKET" --key "$key"
+          done < stale.txt
+      - name: Check what the public address serves
+        run: |
+          archive=$(basename feed/Achtung-*.zip)
+          base=${FEED_URL%/*}
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS -o served.xml "$FEED_URL" &&
+              python3 -B macos/scripts/appcast.py check served.xml release/Achtung.zip; then
+              break
+            fi
+            [[ $attempt -lt 6 ]] || { echo "::error::$FEED_URL doesn't offer this build"; exit 1; }
+            sleep 10
+          done
+          for name in "$archive" Achtung-latest.zip; do
+            curl -fsS -o served.zip "$base/$name"
+            cmp served.zip release/Achtung.zip || { echo "::error::$base/$name isn't this build"; exit 1; }
+          done
+          echo "Published $archive at $FEED_URL" >> "$GITHUB_STEP_SUMMARY"
