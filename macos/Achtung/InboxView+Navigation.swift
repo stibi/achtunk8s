@@ -22,9 +22,19 @@ extension InboxView {
         Binding {
             page
         } set: {
-            page = $0
+            show($0)
             query = SearchQuery()
         }
+    }
+
+    /// Goes to `page`. Choosing Live while it's shown goes back to its latest, also when a
+    /// search covers it and no stream is there to hear the request: its card collapses here.
+    func show(_ page: InboxPage?) {
+        if page == .list(.allChannels), self.page == page {
+            liveKept = nil
+            liveLatestRequest += 1
+        }
+        self.page = page
     }
 
     /// Shows an occurrence in its channel, selected even if its list doesn't hold it: from
@@ -43,7 +53,7 @@ extension InboxView {
             openFromHome(occurrence)
             selectedID = occurrence.id
         case .list(let scope):
-            page = .list(scope)
+            show(.list(scope))
         }
     }
 

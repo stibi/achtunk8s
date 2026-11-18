@@ -137,8 +137,9 @@ badges. Channels and Live show only unread alerts by default, until you switch
 baseline, so a later change stays unread. Live puts every channel in one stream next to a
 timeline of the last 24 hours. Its cards are one line each until you open one; opening it
 marks it read and closes the one before, so clicking (or ↓ and Return) down the stream
-clears it. When it is all caught up, the app's rat takes a coffee
-break:
+clears it. Silencing the open card closes it too. Esc, or choosing Live again in the
+sidebar, closes the open card and goes back to the newest. When it is all caught up, the
+app's rat takes a coffee break:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="macos/Icon/coffee-break/coffee-break-dark-small.gif">

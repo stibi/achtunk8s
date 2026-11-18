@@ -22,6 +22,8 @@ struct LiveView: View {
     @Binding var kept: Int?
     let markRead: (Occurrence) -> Void
     let silence: SilenceActions
+    /// Requests to go back to the latest (`LiveStream.latestRequest`).
+    let latestRequest: Int
 
     /// The latest click on a timeline marker.
     @State private var timelineClick: LiveStream.TimelineClick?
@@ -42,7 +44,8 @@ struct LiveView: View {
                         occurrences: occurrences, readState: readState, hasOlder: hasOlder,
                         lastUpdated: lastUpdated, loadOlder: loadOlder, hidesRead: $hidesRead,
                         kept: $kept, markRead: markRead, silence: silence,
-                        showsTimes: cardWidth >= LiveCard.timesWidth, timelineClick: timelineClick)
+                        showsTimes: cardWidth >= LiveCard.timesWidth, timelineClick: timelineClick,
+                        latestRequest: latestRequest)
                     if hasTimeline {
                         LiveTimeline(occurrences: occurrences + firing, readState: readState) {
                             timelineClick = LiveStream.TimelineClick(
@@ -63,5 +66,5 @@ struct LiveView: View {
         occurrences: SampleData.occurrences, firing: [], readState: SampleData.readState,
         hasOlder: false, lastUpdated: nil, loadOlder: {}, hidesRead: .constant(false),
         kept: .constant(nil), markRead: { _ in },
-        silence: .none)
+        silence: .none, latestRequest: 0)
 }
