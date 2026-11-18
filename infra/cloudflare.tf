@@ -146,3 +146,34 @@ resource "cloudflare_web_analytics_site" "site" {
   zone_tag     = local.zone_id
   auto_install = true
 }
+
+# --- App updates ------------------------------------------------------------------------
+
+# Where the macOS client's updates live: the Sparkle appcast and the app archives
+# (ADR 0021), served at https://updates.achtunk8s.io. The release workflow writes the
+# objects; Terraform owns only the bucket and its domain. The feed URL is compiled into
+# every installed copy, so neither the bucket nor the domain may go away.
+#
+# No lifecycle rule on purpose: the release workflow deletes archives that drop out of the
+# appcast. Deleting by age would break updates after a quiet month.
+resource "cloudflare_r2_bucket" "updates" {
+  account_id    = var.cloudflare_account_id
+  name          = "achtunk8s-updates"
+  location      = "weur"
+  storage_class = "Standard"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Public read access to the bucket, through the zone (and its cache). The bucket's
+# r2.dev address stays off. Creates the DNS record itself.
+resource "cloudflare_r2_custom_domain" "updates" {
+  account_id  = var.cloudflare_account_id
+  bucket_name = cloudflare_r2_bucket.updates.name
+  domain      = "updates.${local.zone_name}"
+  zone_id     = local.zone_id
+  enabled     = true
+  min_tls     = "1.2"
+}

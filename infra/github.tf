@@ -118,3 +118,22 @@ resource "github_repository_environment_deployment_policy" "infra_main" {
   environment    = github_repository_environment.infra.environment
   branch_pattern = "main"
 }
+
+# The environment the release workflow publishes the macOS client in (ADR 0021), only from
+# main. It holds the update signing key and the R2 keys for the updates bucket (README.md),
+# so a workflow on any other branch, or from a fork, can't read them.
+resource "github_repository_environment" "release" {
+  repository  = github_repository.achtunk8s.name
+  environment = "release"
+
+  deployment_branch_policy {
+    protected_branches     = false
+    custom_branch_policies = true
+  }
+}
+
+resource "github_repository_environment_deployment_policy" "release_main" {
+  repository     = github_repository.achtunk8s.name
+  environment    = github_repository_environment.release.environment
+  branch_pattern = "main"
+}
