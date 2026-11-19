@@ -11,4 +11,6 @@ public enum ServerError: Error, Equatable, Sendable {
     /// 409 or 502 on a silence: the alert can't be silenced (no Alertmanager configured,
     /// or not an Alertmanager alert), or its Alertmanager was unreachable or refused.
     case silenceFailed(String)
+    /// 502 on a graph: the instance's metrics backend was unreachable or refused the query.
+    case metricsFailed(String)
 }

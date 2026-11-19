@@ -221,6 +221,15 @@ components:
           items:
             $ref: "#/components/schemas/Occurrence"
           description: Other occurrences of the same alert, newest first, at most 20
+        metricPanels:
+          description: "The graphs GET /api/occurrences/{id}/metrics/{panel} has for it,
+            e.g. pod-cpu (ADR 0026): none when its instance has no metrics
+            backend or the alert names nothing a panel shows. A string, not an
+            enum, so a client skips the panels it doesn't know. Always sent;
+            absent from servers before graphs"
+          type: array
+          items:
+            type: string
       required:
         - occurrence
         - events
@@ -619,6 +628,81 @@ components:
       description: "The alerts the tile counts: active ones are open, the others
         silenced and inhibited. Leaves out the ignored alert names
         (/api/settings/ignored-alerts)"
+    MetricGraph:
+      type: object
+      properties:
+        panel:
+          type: string
+          description: The panel asked for, e.g. pod-cpu
+        unit:
+          type: string
+          enum:
+            - cores
+          description: "What the values are: CPU cores for pod-cpu"
+        from:
+          type: string
+          format: date-time
+          description: The window's start
+        to:
+          type: string
+          format: date-time
+          description: The window's end
+        stepSeconds:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+          description: The time between two points
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: What the series is of, e.g. the container's name
+              role:
+                type: string
+                enum:
+                  - usage
+                  - request
+                  - limit
+                description: "usage: what was used; request and limit: the Kubernetes request
+                  and limit to read it against"
+              points:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    at:
+                      type: string
+                      format: date-time
+                    value:
+                      type: number
+                  required:
+                    - at
+                    - value
+                description: "Oldest first, one per step where the backend has a value: a gap is
+                  missing points, and a series that ends early ended (e.g. the
+                  pod is gone)"
+            required:
+              - name
+              - role
+              - points
+          description: By name, then usage, request, limit. Without usage there are no
+            series
+        truncated:
+          type: boolean
+          description: "True when series were left out: only the 10 with the highest usage
+            are sent"
+      required:
+        - panel
+        - unit
+        - from
+        - to
+        - stepSeconds
+        - series
+        - truncated
     IgnoredAlertNames:
       type: object
       properties:
@@ -1392,6 +1476,61 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/occurrences/{id}/metrics/{panel}:
+    get:
+      operationId: getOccurrenceMetrics
+      summary: A graph of what the occurrence's alert is about, from its metrics backend
+      tags:
+        - client
+      description: "The server builds the query from the alert's labels and the panel:
+        pod-cpu is the CPU usage of each container of the alert's pod (its
+        namespace and pod labels), with their requests and limits. The window:
+        for a firing alert the last 3 hours; for a resolved one from 2.5 hours
+        before it started to 30 minutes after it ended or now, at least 3 hours
+        and at most a day. Answers are reused for 30 seconds (ADR 0026). 404: no
+        such occurrence, or it has no such panel (see metricPanels in its
+        detail). 502: the metrics backend was unreachable or refused the query."
+      parameters:
+        - schema:
+            type: integer
+            minimum: 0
+            exclusiveMinimum: true
+            maximum: 9007199254740991
+          in: path
+          name: id
+          required: true
+        - schema:
+            type: string
+            enum:
+              - pod-cpu
+          in: path
+          name: panel
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricGraph"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
           description: Default Response
           content:
             application/json:

@@ -6,6 +6,7 @@ import { changesFeed } from "./services/changes.ts";
 import { alertmanagerAlertsFrom } from "./services/home.ts";
 import { servicesFor } from "./services/index.ts";
 import { irmHeartbeatsFrom } from "./services/irm-heartbeats.ts";
+import { metricsFrom } from "./services/metrics.ts";
 import { reconcilerFor } from "./services/reconcile.ts";
 import { silencesFrom } from "./services/silences.ts";
 import { alertmanagerSource } from "./sources/alertmanager/index.ts";
@@ -35,8 +36,13 @@ const heartbeats = irmHeartbeatsFrom(
       app.log.warn({ integrationId, err: error }, "could not read heartbeats from Grafana IRM"),
   },
 );
+const metrics = metricsFrom(config.metrics, {
+  // The client shows the graph's error; the message names no host or credential.
+  onReadError: (instance, error) =>
+    app.log.warn({ instance, err: error }, "could not read metrics"),
+});
 const changes = changesFeed();
-const services = servicesFor(db, { silences, alerts, heartbeats, changes });
+const services = servicesFor(db, { silences, alerts, heartbeats, changes, metrics });
 const app = buildApp({
   logLevel: config.logLevel,
   sources: [alertmanagerSource],

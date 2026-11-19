@@ -8,6 +8,7 @@ import { changesFeed } from "../src/services/changes.ts";
 import { type AlertmanagerAlertsOptions, alertmanagerAlertsFrom } from "../src/services/home.ts";
 import { servicesFor } from "../src/services/index.ts";
 import { type IrmHeartbeatsOptions, irmHeartbeatsFrom } from "../src/services/irm-heartbeats.ts";
+import { type MetricsBackend, type MetricsOptions, metricsFrom } from "../src/services/metrics.ts";
 import { type Reconciler, reconcilerFor } from "../src/services/reconcile.ts";
 import { type SilencesOptions, silencesFrom } from "../src/services/silences.ts";
 import { alertmanagerSource } from "../src/sources/alertmanager/index.ts";
@@ -23,6 +24,7 @@ export const unusedServices: Services = {
   listChannelOccurrences: unused,
   listOccurrences: unused,
   getOccurrence: unused,
+  getOccurrenceGraph: unused,
   silenceOccurrence: unused,
   unsilenceOccurrence: unused,
   setOccurrenceReminder: unused,
@@ -48,6 +50,9 @@ export interface TestAppOptions {
     readonly integrations: Readonly<Record<string, string>>;
     readonly options?: IrmHeartbeatsOptions;
   };
+  /** Each instance's metrics backend, e.g. a stub (test/prometheus-stub.ts). None by default. */
+  readonly metrics?: Readonly<Record<string, MetricsBackend>>;
+  readonly metricsOptions?: MetricsOptions;
   /** The change stream's timing and limit. */
   readonly events?: EventStreamOptions;
   /** The clock of the services themselves, e.g. the home view's last 24 hours. */
@@ -78,6 +83,10 @@ export async function appWithDatabase(options: TestAppOptions = {}): Promise<{
         options.irm?.options,
       ),
       changes,
+      metrics: metricsFrom(new Map(Object.entries(options.metrics ?? {})), {
+        ...(options.now === undefined ? {} : { now: options.now }),
+        ...options.metricsOptions,
+      }),
     },
     options.now,
   );

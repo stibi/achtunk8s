@@ -10,13 +10,14 @@ import {
 } from "./inbox.ts";
 import { ingestNotification } from "./ingest.ts";
 import type { IrmHeartbeats } from "./irm-heartbeats.ts";
+import { getOccurrenceGraph, type Metrics } from "./metrics.ts";
 import { cancelOccurrenceReminder, remindDue, setOccurrenceReminder } from "./reminders.ts";
 import { getIgnoredAlertNames, setIgnoredAlertNames } from "./settings.ts";
 import { type Silences, silenceOccurrence, unsilenceOccurrence } from "./silences.ts";
 
 /**
- * Every use case bound to one database, the instances' Alertmanagers and Grafana IRM:
- * what src/http needs to serve requests. Each change is published to `changes` (ADR 0019).
+ * Every use case bound to one database, the instances' Alertmanagers and metrics backends,
+ * and Grafana IRM: what src/http needs to serve requests. Each change is published to `changes` (ADR 0019).
  */
 export function servicesFor(
   db: Database,
@@ -25,10 +26,11 @@ export function servicesFor(
     readonly alerts: AlertmanagerAlerts;
     readonly heartbeats: IrmHeartbeats;
     readonly changes: Changes;
+    readonly metrics: Metrics;
   },
   now: () => Date = () => new Date(),
 ) {
-  const { silences, alerts, heartbeats, changes } = monitors;
+  const { silences, alerts, heartbeats, changes, metrics } = monitors;
   // Published whatever the result: a failed silence is a result too, and Alertmanager may
   // have taken part of it. A thrown error changed nothing to tell about.
   const changing = async <T>(kind: ChangeKind, change: Promise<T>) => {
@@ -46,7 +48,9 @@ export function servicesFor(
     ) => listChannelOccurrences(db, silences, ...args),
     listOccurrences: (filter: Parameters<typeof listAllOccurrences>[2]) =>
       listAllOccurrences(db, silences, filter),
-    getOccurrence: (id: number) => getOccurrence(db, silences, id),
+    getOccurrence: (id: number) => getOccurrence(db, silences, metrics, id),
+    getOccurrenceGraph: (id: number, panel: Parameters<typeof getOccurrenceGraph>[3]) =>
+      getOccurrenceGraph(db, metrics, id, panel),
     silenceOccurrence: (id: number, durationSeconds: number) =>
       changing("silences", silenceOccurrence(db, silences, id, durationSeconds)),
     unsilenceOccurrence: (id: number) =>

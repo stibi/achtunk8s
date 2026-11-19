@@ -148,12 +148,16 @@ public struct OccurrenceDetail: Sendable, Hashable {
     public let events: [OccurrenceEvent]
     /// Other occurrences of the same alert, newest first.
     public let otherOccurrences: [Occurrence]
+    /// The graphs the server has for it (ADR 0026); none from a server before graphs.
+    public let metricPanels: [MetricPanel]
 
     public init(
-        occurrence: Occurrence, events: [OccurrenceEvent], otherOccurrences: [Occurrence]
+        occurrence: Occurrence, events: [OccurrenceEvent], otherOccurrences: [Occurrence],
+        metricPanels: [MetricPanel] = []
     ) {
         self.occurrence = occurrence
         self.events = events
         self.otherOccurrences = otherOccurrences
+        self.metricPanels = metricPanels
     }
 }
