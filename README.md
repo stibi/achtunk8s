@@ -41,6 +41,9 @@ you silence it where it came from.
   Mark All as Read (⇧⌘K).
 - **Remind Me.** An alert that can wait comes back as unread when you say: this evening,
   tomorrow morning, next week, or a date and time you pick.
+- **The pod's CPU beside the alert.** An alert about a pod shows a graph of its CPU per
+  container, with requests and limits, over the last 3 hours (or around a resolved alert),
+  read from your Prometheus, Mimir, Thanos or VictoriaMetrics.
 - **Resends resurface.** An alert still firing after an hour comes back as *resent*,
   marked apart from new ones.
 - **Home:** every Alertmanager at a glance: open alerts by severity, silenced, inhibited,
@@ -75,6 +78,7 @@ Alertmanager ──webhook──▶ server ──▶ PostgreSQL
      ▲                      │
      └── silences, alerts ──┤  REST API (OpenAPI)
 Grafana IRM ◀── heartbeats ─┤
+Prometheus  ◀── pod CPU ────┤  (or Mimir, Thanos, VictoriaMetrics)
                             ▼
           macOS app (change stream over SSE; polls as a fallback)
 ```
@@ -296,8 +300,29 @@ them are signed with a key that only the release workflow holds, and the app ref
 anything else as *Update Rejected*. The updater is [Sparkle](https://sparkle-project.org)
 ([ADR 0021](docs/adr/0021-in-app-updates.md)).
 
+## The alerted pod's CPU
+
+![An alert's details with the CPU graph of its pod: usage over the last 3 hours climbing to the limit, the request and limit as dashed lines, the time the alert fired marked](docs/media/pod-cpu.png)
+
+When an alert names a pod (its `namespace` and `pod` labels, as the kubernetes-mixin
+alerts do), its details show the pod's CPU per container under the summary: the last
+3 hours while it fires, and for a resolved one from 2½ hours before it started to half an
+hour after it ended. The request and limit are dashed lines (from kube-state-metrics), the
+time the alert fired is marked, and where a pod's samples stop, after an OOM kill or an
+eviction, the graph says so. Hover for the values. While the alert fires, the graph
+refreshes every minute.
+
+The server asks the instance's metrics backend (`METRICS`), never the app: it builds the
+query from the alert's labels, so the API is no PromQL proxy, and it reuses an answer for
+30 seconds, so many open apps cost one query. An instance without a backend shows no graph.
+For a Mimir or Thanos that holds many clusters, `matchers` adds e.g. `{"cluster": "prod"}`
+to every query, and `headers` sends e.g. `X-Scope-OrgID`. The server needs network access
+to that API. [ADR 0026](docs/adr/0026-metrics-of-the-alerted-resource.md) (proposed).
+
 ## Roadmap
 
+- **More graphs of the alerted resource** (planned): the pod's memory, a node's, a
+  deployment's pods, and a time span to choose. The CPU graph above is the first.
 - **Dead man's switch** (planned). A witness outside the cluster the inbox runs in, which
   alerts when expected heartbeats *stop*: silence otherwise looks like health. The
   inbox would send a deep heartbeat (each Watchdog seen, time of the last ingest) and show
@@ -334,6 +359,7 @@ docker run -p 8080:8080 \
 | `DATABASE_URL` | Required. Standard libpq variables such as `PGPASSWORD` fill in the rest. |
 | `ALERTMANAGERS` | Optional JSON: instance name → `{ "url", "username", "password", "irmIntegrationId" }`. Enables silences and Home for that instance. Holds credentials, so set it from a secret. |
 | `IRM_API_URL`, `IRM_API_TOKEN` | Optional, together: the Grafana IRM heartbeat on Home tiles. |
+| `METRICS` | Optional JSON: instance name → `{ "url", "username", "password", "bearerToken", "headers", "matchers" }`, a Prometheus-compatible query API. Enables the CPU graph in an alert about a pod. Holds credentials, so set it from a secret. |
 | `HOST`, `PORT`, `LOG_LEVEL` | Defaults `0.0.0.0`, `8080`. |
 
 `/healthz` and `/readyz` are the liveness and readiness probes.

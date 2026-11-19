@@ -16,6 +16,9 @@ struct AlertDetailView: View {
     let detail: OccurrenceDetail?
     let detailProblem: ServerError?
     let silence: SilenceActions
+    /// The open alert's graph as last loaded, and how to (re)load it (ADR 0026).
+    var graph: GraphLoad?
+    var loadGraph: ((MetricPanel) async -> Void)?
 
     var body: some View {
         GeometryReader { geometry in
@@ -52,7 +55,18 @@ struct AlertDetailView: View {
     private var details: some View {
         AlertDetails(
             occurrence: occurrence, silence: silence, events: detail?.events,
-            hasCopyShortcut: true)
+            hasCopyShortcut: true, graph: podCPUGraph)
+    }
+
+    /// Shown once the detail says the server has the graph for this alert: an alert without
+    /// a pod, or on an instance without a metrics backend, has no card at all.
+    private var podCPUGraph: PodCPUGraph? {
+        guard let loadGraph, detail?.occurrence.id == occurrence.id,
+            detail?.metricPanels.contains(.podCPU) == true
+        else { return nil }
+        return PodCPUGraph(occurrence: occurrence, load: graph) {
+            await loadGraph(.podCPU)
+        }
     }
 
     private var panel: some View {
@@ -74,6 +88,9 @@ struct AlertDetails<History: View>: View {
     var hasCopyShortcut = false
     /// Collapses a Live card when its header is clicked; nil in the detail pane.
     var collapse: (() -> Void)?
+    /// The CPU graph of the alert's pod, under the summary and actions; only the detail pane
+    /// has it (ADR 0026).
+    var graph: PodCPUGraph?
     @ViewBuilder var history: () -> History
 
     private var alert: IncomingAlert { occurrence.alert }
@@ -101,6 +118,7 @@ struct AlertDetails<History: View>: View {
                     }
                 }
             }
+            graph
             history()
             AnnotationsSection(alert: alert)
             LabelsSection(alert: alert)
@@ -119,11 +137,11 @@ struct AlertDetails<History: View>: View {
 extension AlertDetails where History == EmptyView {
     init(
         occurrence: Occurrence, silence: SilenceActions, events: [OccurrenceEvent]? = nil,
-        hasCopyShortcut: Bool = false, collapse: (() -> Void)? = nil
+        hasCopyShortcut: Bool = false, collapse: (() -> Void)? = nil, graph: PodCPUGraph? = nil
     ) {
         self.init(
             occurrence: occurrence, silence: silence, events: events,
-            hasCopyShortcut: hasCopyShortcut, collapse: collapse
+            hasCopyShortcut: hasCopyShortcut, collapse: collapse, graph: graph
         ) {
             EmptyView()
         }

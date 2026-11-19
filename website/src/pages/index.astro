@@ -57,6 +57,16 @@ const features = [
     ],
   },
   {
+    id: "metrics",
+    title: "The pod's CPU, beside the alert",
+    shot: "pod-cpu",
+    alt: "An alert about a pod with a graph of its CPU over the last 3 hours, climbing to the limit, with the request and limit as dashed lines and the moment the alert fired marked.",
+    body: [
+      "An alert about a pod shows the pod's CPU per container under its summary: the last 3 hours while it fires, the hours around it once it has resolved, with the request and limit as dashed lines and the moment it fired marked. Where the samples stop, after an OOM kill or an eviction, the graph says so.",
+      "The server asks your Prometheus, Mimir, Thanos or VictoriaMetrics, never the app, and builds the query from the alert's labels: no PromQL travels over the API. Memory and other resources come next.",
+    ],
+  },
+  {
     id: "search",
     title: "Search every alert",
     shot: "search",

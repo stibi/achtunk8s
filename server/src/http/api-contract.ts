@@ -7,6 +7,7 @@ import type {
 } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import type { ChannelAddress } from "../domain/channel.ts";
+import type { MetricPanelId } from "../domain/metrics.ts";
 import type { AlertmanagerSilenceResult } from "../services/alertmanager-silences.ts";
 import type { AlertmanagerAlertList, Home } from "../services/home.ts";
 import type {
@@ -16,6 +17,7 @@ import type {
   OccurrenceFilter,
   OccurrencePage,
 } from "../services/inbox.ts";
+import type { OccurrenceGraphResult } from "../services/metrics.ts";
 import type { ReminderResult } from "../services/reminders.ts";
 import type { SilenceResult } from "../services/silences.ts";
 
@@ -28,6 +30,8 @@ export interface Inbox {
   ): Promise<ChannelOccurrencePage>;
   listOccurrences(filter: OccurrenceFilter): Promise<OccurrencePage>;
   getOccurrence(id: number): Promise<OccurrenceDetail | null>;
+  /** A graph of what the occurrence's alert is about (ADR 0026). */
+  getOccurrenceGraph(id: number, panel: MetricPanelId): Promise<OccurrenceGraphResult>;
   silenceOccurrence(id: number, durationSeconds: number): Promise<SilenceResult>;
   unsilenceOccurrence(id: number): Promise<SilenceResult>;
   /** Sets or replaces the occurrence's reminder (ADR 0025). */
