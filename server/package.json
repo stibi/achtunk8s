@@ -23,7 +23,7 @@
     "api:generate": "vitest run test/http/openapi.test.ts --update"
   },
   "dependencies": {
-    "@fastify/swagger": "^9.9.3",
+    "@fastify/swagger": "^9.9.5",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.8",
     "fastify-type-provider-zod": "^7.0.0",
