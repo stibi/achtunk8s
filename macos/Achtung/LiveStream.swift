@@ -124,10 +124,12 @@ struct LiveStream: View {
         .focusable()
         .focused($hasFocus)
         .focusEffectDisabled()
-        .onKeyPress(.downArrow) { moveKeyboard(by: 1, with: proxy) }
-        .onKeyPress(.upArrow) { moveKeyboard(by: -1, with: proxy) }
-        .onKeyPress(keys: [.return, .space]) { _ in toggleKeyboardCard() }
-        .onKeyPress(.escape) { escape() }
+        .onKeyPress(Shortcut.selectNext.keyEquivalent) { moveKeyboard(by: 1, with: proxy) }
+        .onKeyPress(Shortcut.selectPrevious.keyEquivalent) { moveKeyboard(by: -1, with: proxy) }
+        .onKeyPress(keys: [Shortcut.open.keyEquivalent, Shortcut.toggleCard.keyEquivalent]) { _ in
+            toggleKeyboardCard()
+        }
+        .onKeyPress(Shortcut.back.keyEquivalent) { escape() }
         // After the update that put a hidden card back into the stream, so it's there to
         // scroll to; on appearing too, for a click while the stream was all caught up.
         .onChange(of: revealRequest) { scrollToRevealed(with: proxy) }

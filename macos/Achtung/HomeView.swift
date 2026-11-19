@@ -160,8 +160,8 @@ private struct HomeHeader: View {
                 Image(systemName: "arrow.clockwise")
             }
             .controlSize(.small)
-            .keyboardShortcut("r")
-            .help("Refresh (⌘R)")
+            .shortcut(.refresh)
+            .help("Refresh (\(Shortcut.refresh.symbols))")
             .accessibilityLabel("Refresh")
         }
         .padding(.horizontal, 8)

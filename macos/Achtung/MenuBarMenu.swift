@@ -89,9 +89,9 @@ struct MenuBarMenu: View {
             NSApp.activate()
             openSettings()
         }
-        .keyboardShortcut(",")
+        .shortcut(.settings)
         Divider()
         Button("Quit Achtung") { NSApp.terminate(nil) }
-            .keyboardShortcut("q")
+            .shortcut(.quit)
     }
 }

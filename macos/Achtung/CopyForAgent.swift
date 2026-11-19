@@ -34,10 +34,10 @@ struct CopyForAgentButton: View {
             .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.bordered)
-        .keyboardShortcut(hasShortcut ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil)
+        .shortcut(.copyForAgent, isActive: hasShortcut)
         .help(
             "Copy the alert's details as Markdown, to give an agent to investigate"
-                + (hasShortcut ? " (⇧⌘C)" : "")
+                + (hasShortcut ? " (\(Shortcut.copyForAgent.symbols))" : "")
         )
         .task(id: copies) {
             guard copies > 0 else { return }

@@ -34,3 +34,22 @@ custom_rules:
       AchtungDomain and AchtungAPI must build on Linux, so they can't import SwiftUI or
       AppKit. Move UI code to the app target (macos/Achtung/).
     severity: error
+  shortcuts_from_the_catalogue:
+    name: Shortcuts come from the catalogue
+    included: "Achtung/.*\\.swift$"
+    excluded: "Achtung/ShortcutKeys\\.swift$"
+    regex: "\\.keyboardShortcut\\((?!\\.(defaultAction|cancelAction)\\))"
+    message: >-
+      Add the shortcut to Shortcut (AchtungDomain) and bind it with .shortcut(...), so the
+      keyboard shortcuts help (⌥?) lists it. Only a dialog's default and cancel buttons
+      are exempt.
+    severity: error
+  key_presses_from_the_catalogue:
+    name: Key presses come from the catalogue
+    included: "Achtung/.*\\.swift$"
+    regex: "\\.onKeyPress\\s*(\\{|\\((?!(keys: \\[)?Shortcut\\.))"
+    message: >-
+      Add the key to Shortcut (AchtungDomain) and pass its keyEquivalent, e.g.
+      .onKeyPress(Shortcut.open.keyEquivalent), so the keyboard shortcuts help (⌥?)
+      lists it.
+    severity: error

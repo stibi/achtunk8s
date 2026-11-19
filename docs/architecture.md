@@ -388,6 +388,23 @@ The identity below is a contract that features build on
   context menu in an alert's details searches for that label ("Search for name=value").
   No match says so with the query; the server's 400 shows in place of the results.
   Tokens are added once each, and a new instance token replaces the old one.
+- Keyboard shortcuts are defined once, in `Shortcut` (AchtungDomain): key, modifiers,
+  title and group. Controls take theirs with `shortcut(_:)` (`ShortcutKeys`), never with
+  a `keyboardShortcut` of their own, and `onKeyPress` takes a catalogue shortcut's
+  `keyEquivalent` (SwiftLint's `shortcuts_from_the_catalogue` and
+  `key_presses_from_the_catalogue`; only a dialog's default and cancel buttons are
+  exempt), and the
+  help lists `Shortcut.allCases`, so a new shortcut can't be missing from it. The
+  catalogue covers the main window and the menu bar menu, not the Settings window. The help (`ShortcutsHelp`) is an overlay in the main
+  window: a dimmed backdrop and a panel with the shortcuts by group, opened and closed
+  with ⌥? or Help › Keyboard Shortcuts, closed with Esc, its close button or a click
+  beside the panel. ⌥? means Option and whichever key types "?" on the keyboard layout.
+  A local event monitor for that window (`ShortcutsHelpEvents`) handles the keys, because
+  a key without ⌘ would go to the focused view first (the search field would type "¿").
+  It also makes the help modal: while it's open, every key but Esc, ⌥? and the App
+  group's shortcuts (Settings, close, quit) stops there, a click on the title bar or the
+  toolbar, or a right click anywhere, closes the help instead of acting on what is there,
+  and the backdrop takes the clicks on the content. The focus never moves, so closing the help returns to where the user was.
 - "Copy for Agent" (the details' button, ⇧⌘C in the detail pane, a list row's context
   menu) puts the alert on the pasteboard as Markdown for an agent to investigate
   (`AgentReport` in AchtungDomain): the title; its state, severity, instance and channel;

@@ -46,12 +46,14 @@ struct AchtungApp: App {
             }
             .frame(minWidth: 900, minHeight: 500)
             .modifier(UpdateToolbar(model: updates.model))
+            .shortcutsHelp()
         }
         .onChange(of: serverAddress) {
             app.connect(to: ServerSetting.url(from: serverAddress))
         }
         .commands {
             UpdateCommands(updates: updates)
+            ShortcutsHelpCommands()
         }
         Settings {
             SettingsView(app: app)

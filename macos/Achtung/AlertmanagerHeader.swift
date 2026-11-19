@@ -31,8 +31,8 @@ struct AlertmanagerHeader: View {
             Button(action: back) {
                 Label("Home", systemImage: "chevron.left")
             }
-            .keyboardShortcut(.cancelAction)
-            .help("Back to Home (Esc)")
+            .shortcut(.back)
+            .help("Back to Home (\(Shortcut.back.symbols))")
             Circle()
                 .fill(statusColor)
                 .frame(width: 9, height: 9)
@@ -54,8 +54,8 @@ struct AlertmanagerHeader: View {
                 Image(systemName: "arrow.clockwise")
             }
             .controlSize(.small)
-            .keyboardShortcut("r")
-            .help("Refresh (⌘R)")
+            .shortcut(.refresh)
+            .help("Refresh (\(Shortcut.refresh.symbols))")
             .accessibilityLabel("Refresh")
             Button(action: bulk.markRead) {
                 Label("Mark as Read", systemImage: "checkmark.circle")
@@ -63,8 +63,8 @@ struct AlertmanagerHeader: View {
             }
             .controlSize(.small)
             .disabled(bulk.unread == 0)
-            .keyboardShortcut("k", modifiers: [.command, .shift])
-            .help("Mark the listed alerts read in Achtung (⇧⌘K)")
+            .shortcut(.markAllRead)
+            .help("Mark the listed alerts read in Achtung (\(Shortcut.markAllRead.symbols))")
             silenceMenu
         }
         .padding(.horizontal, 8)

@@ -57,7 +57,7 @@ struct AlertList: View {
                 }
             }
             .animation(.default, value: occurrences.map(\.id))
-            .onKeyPress(.return) {
+            .onKeyPress(Shortcut.open.keyEquivalent) {
                 guard let open, let occurrence = occurrences.first(where: { $0.id == selection })
                 else { return .ignored }
                 open(occurrence)

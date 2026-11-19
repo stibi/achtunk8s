@@ -58,6 +58,8 @@ you silence it where it came from.
   clipboard as Markdown for an AI agent.
 - **Keeps itself up to date:** the app checks for a new build once a day and installs
   it when you say so.
+- **Keyboard shortcuts** for search, refresh, Mark All as Read, Copy for Agent, Remind
+  Me and moving through Live; ⌥? lists them all.
 - **Zero setup per channel:** point an Alertmanager receiver at a new URL and the
   channel exists.
 - **Self-hosted, small and open source:** one container, one Postgres, no accounts. MIT
@@ -218,6 +220,15 @@ summary or labels, exact label filters (`namespace=prod`), `severity:critical` a
 `instance:<name>`. Filters become tokens as you type. Results stay live like any list,
 and a label's context menu in an alert's details searches for it
 ([ADR 0017](docs/adr/0017-search-occurrences.md)).
+
+## Keyboard shortcuts
+
+![The keyboard shortcuts help over the macOS app's window: shortcuts grouped under Navigation, Alerts, Search and App](docs/media/shortcuts.png)
+
+⌥? (Option and the key that types `?` on your keyboard layout) shows every keyboard
+shortcut over the window, as does Help › Keyboard Shortcuts. Esc, the close button, a
+click beside the panel or ⌥? again closes it. While it is open, nothing behind it reacts,
+and the focus is where you left it when it closes.
 
 ## Notifications that survive restarts
 

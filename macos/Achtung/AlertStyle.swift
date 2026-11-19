@@ -212,8 +212,8 @@ struct ListHeader: View {
             }
             .controlSize(.small)
             .disabled(!hasUnread)
-            .keyboardShortcut("k", modifiers: [.command, .shift])
-            .help("Mark every unread alert here as read (⇧⌘K)")
+            .shortcut(.markAllRead)
+            .help("Mark every unread alert here as read (\(Shortcut.markAllRead.symbols))")
         }
         .padding(.horizontal, 8)
     }

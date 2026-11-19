@@ -70,13 +70,11 @@ struct ReminderButton: View {
                 }
             }
             .buttonStyle(.bordered)
-            .keyboardShortcut(
-                hasShortcut ? KeyboardShortcut("r", modifiers: [.command, .shift]) : nil
-            )
+            .shortcut(.remindMe, isActive: hasShortcut)
             .disabled(isBusy)
             .help(
                 "Bring this alert back as unread at a time you choose, for everyone using this "
-                    + "server" + (hasShortcut ? " (⇧⌘R)" : "")
+                    + "server" + (hasShortcut ? " (\(Shortcut.remindMe.symbols))" : "")
             )
             .popover(isPresented: $isChoosing, arrowEdge: .bottom) {
                 ReminderChooser(

@@ -146,7 +146,7 @@ struct InboxSearch: ViewModifier {
             .background {
                 // ⌘F, as in other Mac apps; the search field has no shortcut of its own.
                 Button("Search") { isFocused = true }
-                    .keyboardShortcut("f")
+                    .shortcut(.search)
                     .opacity(0)
                     .accessibilityHidden(true)
             }
