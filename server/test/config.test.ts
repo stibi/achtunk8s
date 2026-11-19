@@ -12,6 +12,7 @@ describe("loadConfig", () => {
       databaseUrl,
       alertmanagers: new Map(),
       irm: null,
+      metrics: new Map(),
     });
   });
 
@@ -121,5 +122,85 @@ describe("loadConfig", () => {
         IRM_API_TOKEN: "t0ken-s3cret",
       }),
     ).toThrow(expect.not.objectContaining({ message: expect.stringMatching(/s3cret/) }));
+  });
+
+  it("reads each instance's metrics backend, with optional auth, headers and matchers", () => {
+    const config = loadConfig({
+      DATABASE_URL: databaseUrl,
+      METRICS: JSON.stringify({
+        "eu-prod": { url: "http://prometheus.monitoring.svc:9090" },
+        edge: {
+          url: "https://mimir.example.com/prometheus",
+          bearerToken: "t0ken",
+          headers: { "X-Scope-OrgID": "tenant-1" },
+          matchers: { cluster: "edge" },
+        },
+        lab: { url: "https://metrics.example.com/", username: "achtung", password: "pw" },
+      }),
+    });
+
+    expect(config.metrics).toEqual(
+      new Map([
+        [
+          "eu-prod",
+          { url: "http://prometheus.monitoring.svc:9090", auth: null, headers: {}, matchers: {} },
+        ],
+        [
+          "edge",
+          {
+            url: "https://mimir.example.com/prometheus",
+            auth: { kind: "bearer", token: "t0ken" },
+            headers: { "X-Scope-OrgID": "tenant-1" },
+            matchers: { cluster: "edge" },
+          },
+        ],
+        [
+          "lab",
+          {
+            url: "https://metrics.example.com/",
+            auth: { kind: "basic", username: "achtung", password: "pw" },
+            headers: {},
+            matchers: {},
+          },
+        ],
+      ]),
+    );
+  });
+
+  it.each([
+    ["not JSON", "{eu-prod"],
+    ["an invalid instance name", { Onprem: { url: "http://p:9090" } }],
+    ["a URL that is not HTTP", { "eu-prod": { url: "ftp://p" } }],
+    ["credentials in the URL", { "eu-prod": { url: "http://a:s3cret@p:9090" } }],
+    ["a password without a username", { "eu-prod": { url: "http://p", password: "pw" } }],
+    [
+      "basic auth and a bearer token",
+      { "eu-prod": { url: "http://p", username: "a", password: "pw", bearerToken: "t" } },
+    ],
+    [
+      "an Authorization header",
+      { "eu-prod": { url: "http://p", headers: { Authorization: "t" } } },
+    ],
+    [
+      "a header value over lines",
+      { "eu-prod": { url: "http://p", headers: { "X-A": "a\r\nB: c" } } },
+    ],
+    [
+      "a matcher that is not a label name",
+      { "eu-prod": { url: "http://p", matchers: { "a-b": "c" } } },
+    ],
+    ["an unknown field", { "eu-prod": { url: "http://p", query: "up" } }],
+  ])("rejects METRICS with %s", (_, value) => {
+    const text = typeof value === "string" ? value : JSON.stringify(value);
+    expect(() => loadConfig({ DATABASE_URL: databaseUrl, METRICS: text })).toThrow(/METRICS/);
+  });
+
+  it("never puts a metrics backend's secrets in its error", () => {
+    const value = JSON.stringify({
+      "eu-prod": { url: "ftp://p", username: "a", password: "s3cret", bearerToken: "t0ken-s3cret" },
+    });
+    expect(() => loadConfig({ DATABASE_URL: databaseUrl, METRICS: value })).toThrow(
+      expect.not.objectContaining({ message: expect.stringContaining("s3cret") }),
+    );
   });
 });

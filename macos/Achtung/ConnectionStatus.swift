@@ -9,13 +9,14 @@ extension ServerError {
         case .notFound: "Not found"
         case .rejected: "The server rejected a request"
         case .silenceFailed: "Couldn't silence the alert"
+        case .metricsFailed: "Couldn't read the metrics"
         }
     }
 
     var detail: String {
         switch self {
         case .unreachable(let message), .invalidResponse(let message), .notFound(let message),
-            .rejected(let message), .silenceFailed(let message):
+            .rejected(let message), .silenceFailed(let message), .metricsFailed(let message):
             message
         }
     }

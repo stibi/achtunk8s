@@ -93,6 +93,15 @@ export const occurrenceDetailBody = z
     otherOccurrences: z
       .array(occurrenceBody)
       .describe("Other occurrences of the same alert, newest first, at most 20"),
+    metricPanels: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "The graphs GET /api/occurrences/{id}/metrics/{panel} has for it, e.g. pod-cpu (ADR 0026): " +
+          "none when its instance has no metrics backend or the alert names nothing a panel shows. " +
+          "A string, not an enum, so a client skips the panels it doesn't know. Always sent; " +
+          "absent from servers before graphs",
+      ),
   })
   .meta({ id: "OccurrenceDetail" });
 
@@ -143,5 +152,6 @@ export function toOccurrenceDetailBody(
     occurrence: toOccurrenceBody(detail.occurrence),
     events: detail.events.map(toEventBody),
     otherOccurrences: detail.otherOccurrences.map(toOccurrenceBody),
+    metricPanels: [...detail.metricPanels],
   };
 }

@@ -20,6 +20,7 @@ macOS client ◀──── REST API + Server-Sent Events ───── http
 services ──▶ clients ──GET silences, GET alerts (each ≤ 1 per 30 s per instance, fresh for a change)──▶ Alertmanager API
                      ──POST/DELETE silence (the silence button)───────────────────▶
                      ──GET alert_groups (≤ 1 per minute per integration)──────────▶ Grafana IRM API
+                     ──GET query_range (a graph ≤ 1 per 30 s, when the app asks)──▶ Prometheus-compatible API
 ```
 
 Planned parts not built yet: acknowledgement. When you add one, follow the layer
@@ -35,7 +36,7 @@ layers above it.
 | Composition root | `main.ts` | everything | Read config, build dependencies, start the HTTP server, shut down on SIGTERM. Nothing imports it. |
 | HTTP | `http/` | services, sources (index only), domain, config types | Fastify app, routes, request/response schemas. Thin: parse the request, call a service, map the result to a response. Never touches `db/`; `main.ts` passes services in. |
 | Services | `services/` | db, clients, sources (index only), domain | Use cases such as ingest, silence, list. Owns transactions. |
-| Clients | `clients/` | domain, zod | Calls to other systems' APIs, e.g. Alertmanager's silences and alerts, Grafana IRM's alert groups. Maps their answers to domain types. |
+| Clients | `clients/` | domain, zod | Calls to other systems' APIs, e.g. Alertmanager's silences and alerts, Grafana IRM's alert groups, a Prometheus-compatible range query. Maps their answers to domain types. |
 | Storage | `db/` | domain | Drizzle schema, migrations, repositories. Maps rows to domain types and back. |
 | Sources | `sources/` | domain, zod | One folder per source. Turns a raw webhook body into `IncomingAlert[]`. No I/O. |
 | Domain | `domain/` | nothing | Types and pure functions: alert model, severity, lifecycle rules. No libraries, no I/O. |
@@ -176,6 +177,20 @@ The identity below is a contract that features build on
     transaction per reminder, so it comes due once, also with several servers, and one due
     while the server was down comes due on the first sweep after. A reminder is everyone's
     (ADR 0002).
+  - `GET /api/occurrences/{id}/metrics/{panel}` ([ADR 0026](adr/0026-metrics-of-the-alerted-resource.md),
+    proposed): a graph of what the alert is about, from its instance's metrics backend
+    (`METRICS`). `panel` is one of a fixed set, `pod-cpu` for now; the occurrence's detail
+    lists the ones it has as `metricPanels` (strings, so an older client skips new ones).
+    `domain/metrics.ts` holds the panels: which labels each needs (`podOf`: `namespace`
+    and `pod`), its queries, built from the labels with escaped equality matchers plus the
+    instance's configured `matchers`, and the window (`metricWindowOf`: a firing alert's
+    last 3 hours; a resolved one from 2½ hours before to 30 minutes after, 3 hours to a
+    day; at most 240 points). `clients/prometheus.ts` runs each query
+    (`/api/v1/query_range`, 10 s timeout, at most 200 series); `services/metrics.ts`
+    reuses an answer for 30 seconds per query and window through `cachedRead`, at most 200
+    of them. `pod-cpu` is each container's CPU rate with its requests and limits, the 10
+    busiest containers. 404 for an occurrence without that panel, 502 when the backend
+    fails, with a reason that names no host.
   - `POST /api/alertmanagers/{instance}/silences` with `{ "fingerprints": [...],
     "durationSeconds": ... }`: silences each of the Alertmanager's alerts, found by
     fingerprint in a fresh read, with its own exact silence, also alerts that aren't in
@@ -268,7 +283,7 @@ The identity below is a contract that features build on
 - Deployed as one container image (`Dockerfile`). It applies migrations on startup and
   writes nothing to disk, so it runs with a read-only root filesystem.
 - Configuration comes from the environment (`src/config.ts`): `DATABASE_URL` (required),
-  `HOST`, `PORT`, `LOG_LEVEL`, `ALERTMANAGERS`, `IRM_API_URL`, `IRM_API_TOKEN`. The
+  `HOST`, `PORT`, `LOG_LEVEL`, `ALERTMANAGERS`, `IRM_API_URL`, `IRM_API_TOKEN`, `METRICS`. The
   standard libpq variables (`PGPASSWORD`, …) fill in what `DATABASE_URL` leaves out, so a
   password never needs URL-encoding.
 - `ALERTMANAGERS` is a JSON object of instance name → `{ "url": "…", "username": "…",
@@ -276,6 +291,12 @@ The identity below is a contract that features build on
   so set it from a secret. An instance without an entry can't be silenced and has no
   entry in the home view. An entry may also name `irmIntegrationId`, its cluster's
   Grafana IRM integration, whose heartbeat its Home tile shows (ADR 0012).
+- `METRICS` is a JSON object of instance name → `{ "url": "…", "username": "…",
+  "password": "…", "bearerToken": "…", "headers": {…}, "matchers": {…} }`: the instance's
+  Prometheus-compatible query API (ADR 0026). All but `url` are optional; basic auth or a
+  bearer token, not both; `headers` (not `Authorization`) e.g. for Mimir's tenant;
+  `matchers`, label name → value, added to every query. It holds credentials, so set it
+  from a secret. An instance without an entry has no graphs.
 - `IRM_API_URL` (e.g. `https://oncall-prod-eu-west-0.grafana.net/oncall`, no credentials
   in it) and `IRM_API_TOKEN` (sent raw as `Authorization`) go together or not at all.
   The token is a secret. Without them, no tile has an IRM heartbeat.
@@ -337,8 +358,9 @@ The identity below is a contract that features build on
   disappears, for example because the operator moved it to another instance, the view
   switches to Live. Both are newest change first and paged by `nextCursor`;
   `OccurrenceScope` (all channels or one) selects the route. `InboxModel`, the
-  `HomeModel` it makes on the same server, and `IgnoredAlertsModel` (one in `HomeModel`,
-  one in Settings) are the only code that talks to the server; the views only read them.
+  `HomeModel` it makes on the same server, `IgnoredAlertsModel` (one in `HomeModel`,
+  one in Settings) and `OccurrenceGraphs` (one per inbox window) are the only code that
+  talks to the server; the views only read them.
   `SampleData` exists for SwiftUI previews.
 - An alert's details (`AlertDetails`, in the detail pane and on Live cards) read top
   down: the header, the summary and the `description` annotation as prose (inline
@@ -373,6 +395,21 @@ The identity below is a contract that features build on
   A reminder set or cancelled on another Mac doesn't move `lastEventAt`, so, like a
   silence's end, it shows here on the next refresh only for alerts on the newest page,
   which every refresh re-reads; for older ones, when their list is loaded again.
+- The alerted pod's CPU (ADR 0026, proposed). When the detail lists `pod-cpu` in
+  `metricPanels`, the detail pane shows a card under the summary and the actions
+  (`PodCPUGraph`, with the Swift Charts plot in `PodCPUChart`): each container's usage as a
+  line over a soft area, the request and limit of the alert's own container (its
+  `container` label) or of the only one as quiet dashed lines, the alert's firing span
+  shaded in its severity's colour with "Fired" and "Resolved" marked, and "No data after …"
+  where the samples stop well before the window's end (a pod gone). Values read in
+  millicores below a core and cores above; time ticks fall on round times. Hovering shows a
+  crosshair with each container's value; VoiceOver gets an audio graph
+  (`AXChartDescriptor`). The plot keeps its height while loading, empty ("No CPU data for
+  this pod in this window") or failed, so nothing below it moves. While the alert fires
+  and the app is active, it reloads every minute; a failed reload keeps the graph and
+  marks it not updated. `OccurrenceGraphs`, made by the inbox window for its server, loads
+  it; the series maths (segments split at gaps, references, axis top, hover values, ticks,
+  `CPUFormat`) is `MetricGraph` in AchtungDomain. Live's cards have no graph.
 - Search (ADR 0017): the window's search field (⌘F, `InboxSearch`) searches every
   channel 300 ms after typing stops (`GET /api/occurrences` with `q`, `label`, `severity`,
   `instance`). A finished word that names a filter becomes a token: `name=value` (a

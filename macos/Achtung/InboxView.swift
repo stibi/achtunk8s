@@ -29,6 +29,8 @@ struct InboxView: View {
     /// The search field's text and tokens, and the search shown, if any (`InboxSearch`).
     @State var query = SearchQuery()
     @State var activeSearch: OccurrenceSearch?
+    /// The open alert's graphs (ADR 0026), from the same server; made when the view appears.
+    @State var graphs: OccurrenceGraphs?
 
     private var detailRetry: Date? {
         model.detailProblem == nil ? nil : model.lastUpdated
@@ -107,6 +109,7 @@ struct InboxView: View {
                 selectFirstUnread()
             }
         }
+        .onAppear { graphs = graphs ?? OccurrenceGraphs(baseURL: model.baseURL) }
         .onDisappear {
             model.activeScope = nil
             viewing(nil)
@@ -284,7 +287,9 @@ struct InboxView: View {
                 occurrence: occurrence,
                 detail: model.detail?.occurrence.id == occurrence.id ? model.detail : nil,
                 detailProblem: model.detailProblem,
-                silence: SilenceActions(model))
+                silence: SilenceActions(model),
+                graph: graphs?.load,
+                loadGraph: graphs.map { graphs in { await graphs.load($0, of: occurrence) } })
         } else {
             ContentUnavailableView("Select an alert", systemImage: "bell")
         }
