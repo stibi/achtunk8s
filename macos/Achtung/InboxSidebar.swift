@@ -92,16 +92,7 @@ private struct SidebarRow: View {
         HStack(spacing: 6) {
             Label(title, systemImage: systemImage)
                 .foregroundStyle(unread == 0 ? .secondary : .primary)
-            if unreadCritical > 0 {
-                Text(unreadCritical.formatted())
-                    .font(.caption.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(.red, in: Capsule())
-                    .help("Unread critical alerts")
-            }
+            UnreadCriticalBadge(count: unreadCritical)
             Spacer()
             if hasNews {
                 Circle()
@@ -111,5 +102,24 @@ private struct SidebarRow: View {
             }
         }
         .badge(unread)
+    }
+}
+
+/// The number of unread critical alerts, in white on red; nothing at 0. In sidebar rows and
+/// the command palette's channels.
+struct UnreadCriticalBadge: View {
+    let count: Int
+
+    var body: some View {
+        if count > 0 {
+            Text(count.formatted())
+                .font(.caption.weight(.bold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 1)
+                .background(.red, in: Capsule())
+                .help("Unread critical alerts")
+        }
     }
 }

@@ -50,6 +50,8 @@ you silence it where it came from.
   alert came from. Change or end them later.
 - **Search** across all channels by text, exact labels (`namespace=prod`), severity and
   instance.
+- **Command palette** (⌘P): jump to a channel by typing a few letters of its name, or run
+  a command, without leaving the keyboard.
 - **macOS notifications** for critical alerts, with Mark as Read and Silence on the
   banner. They keep coming from the menu bar with the window closed, and what fired
   while the app was closed notifies on the next launch.
@@ -223,12 +225,25 @@ and a label's context menu in an alert's details searches for it
 
 ## Keyboard shortcuts
 
-![The keyboard shortcuts help over the macOS app's window: shortcuts grouped under Navigation, Alerts, Search and App](docs/media/shortcuts.png)
+![The keyboard shortcuts help over the macOS app's window: shortcuts grouped under Navigation, Command Palette, Search, Alerts and App](docs/media/shortcuts.png)
 
 ⌥? (Option and the key that types `?` on your keyboard layout) shows every keyboard
 shortcut over the window, as does Help › Keyboard Shortcuts. Esc, the close button, a
 click beside the panel or ⌥? again closes it. While it is open, nothing behind it reacts,
 and the focus is where you left it when it closes.
+
+## Command palette
+
+![The command palette over the macOS app: "plat" typed, the platform channels of two instances listed with the matched letters in bold and their unread counts](docs/media/command-palette.png)
+
+⌘P opens a palette over the window. Type a few letters of a channel's name and press
+Return to switch to it: the match is fuzzy (`plat` or `pf` finds `platform`), ignores
+case and diacritics, and shows each channel's instance and unread count, so a second word
+picks the instance (`plat us`). The same list has Home, Live and each Alertmanager's
+detail, and commands with their shortcuts: Refresh, Mark All as Read, Copy for Agent,
+Silence and Remind Me for the open alert, Search Alerts, Keyboard Shortcuts, Check for
+Updates and Settings. ↑ and ↓ (or ⌃P and ⌃N) move,
+Return runs, Esc closes.
 
 ## Notifications that survive restarts
 

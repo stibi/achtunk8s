@@ -405,6 +405,36 @@ The identity below is a contract that features build on
   group's shortcuts (Settings, close, quit) stops there, a click on the title bar or the
   toolbar, or a right click anywhere, closes the help instead of acting on what is there,
   and the backdrop takes the clicks on the content. The focus never moves, so closing the help returns to where the user was.
+- The command palette (⌘P, or View › Command Palette…; `CommandPaletteHost`) is an
+  overlay on the main window for working from the keyboard: a field over a list of
+  channels, pages and commands. ⌘P is Print in apps that print; Achtung doesn't, so the
+  key is free. Typing filters and ranks the rows with `FuzzyMatch` in AchtungDomain:
+  every word of the query must be in a row's text as a subsequence, ignoring case and
+  diacritics; a match at the start of the text ranks first, then at the start of a word,
+  then characters next to each other, with a small cost for the ones skipped; equal
+  matches put the shorter text first. The matched characters are bold. A channel's text
+  is its name and its instance, shown beside it (two instances can have a channel of the
+  same name, ADR 0006), so "plat us" finds `platform` on `us-prod`; it has the
+  sidebar's unread counts. ↑ and ↓ or ⌃P and ⌃N move the selection, which starts on the
+  first row; Return or a click runs it; Esc, ⌘P again or a click outside closes the
+  palette. Before anything is typed the list has headings: the channels visited last in
+  this window (up to five, not kept across launches), Go to (Home, Live, each
+  Alertmanager's detail), Commands, then the other channels in the sidebar's order. The
+  commands are data (`PaletteCommand`: id, title, detail, group, icon, the catalogue's
+  `Shortcut` of the control that does the same, why it is unavailable, and an action).
+  The window lists its own for what is on screen (`InboxView.paletteCommands`): Refresh,
+  Mark All as Read (on Live and in a channel; unavailable with nothing unread), Copy for
+  Agent, Silence Alert… and Remind Me… for the alert open in a channel (unavailable
+  without one), Search Alerts, which focuses the search field, and on Live, Back to the
+  Latest. The palette adds the app's (`CommandPaletteHost`): Open Settings, Check for
+  Updates… (unavailable with the reason where this copy can't update itself) and Keyboard
+  Shortcuts. Going to a page is choosing its sidebar row, so it ends a search. Silence
+  Alert… and Remind Me… ask for how long or when in the palette itself, with the silence
+  button's durations and the Remind Me button's presets (no date picker); a silenced alert gets Change Silence… with End Silence, one with
+  a reminder Change Reminder… with Cancel Reminder, and a failure shows in an alert. The
+  palette only displays shortcuts; each still belongs to the control that has it. Its own
+  keys are in the catalogue too (⌘P, ⌃N, ⌃P; the arrows, Return and Esc it shares with
+  the lists), so the help lists them.
 - "Copy for Agent" (the details' button, ⇧⌘C in the detail pane, a list row's context
   menu) puts the alert on the pasteboard as Markdown for an agent to investigate
   (`AgentReport` in AchtungDomain): the title; its state, severity, instance and channel;

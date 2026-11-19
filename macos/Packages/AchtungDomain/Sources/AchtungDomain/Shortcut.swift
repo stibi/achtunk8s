@@ -4,9 +4,10 @@
 /// `keyboardShortcut` and `onKeyPress` in the app to keys from here).
 ///
 /// The arrows in a list and closing the window are macOS's own behaviour; they are listed
-/// because people look for them. Live binds its arrows from here.
+/// because people look for them. Live and the command palette bind their arrows from here.
 public enum Shortcut: String, Sendable, CaseIterable, Identifiable {
     case selectPrevious, selectNext, open, toggleCard, back
+    case commandPalette, paletteNext, palettePrevious
     case search
     case refresh, markAllRead, copyForAgent, remindMe
     case help, settings, closeWindow, quit
@@ -14,6 +15,7 @@ public enum Shortcut: String, Sendable, CaseIterable, Identifiable {
     /// The help's sections, in its order.
     public enum Group: String, Sendable, CaseIterable, Identifiable {
         case navigation = "Navigation"
+        case palette = "Command Palette"
         case search = "Search"
         case alerts = "Alerts"
         case app = "App"
@@ -98,6 +100,8 @@ public enum Shortcut: String, Sendable, CaseIterable, Identifiable {
         case .open: .return
         case .toggleCard: .space
         case .back: .escape
+        case .commandPalette, .palettePrevious: .character("p")
+        case .paletteNext: .character("n")
         case .refresh: .character("r")
         case .markAllRead: .character("k")
         case .copyForAgent: .character("c")
@@ -115,7 +119,8 @@ public enum Shortcut: String, Sendable, CaseIterable, Identifiable {
     public var modifiers: Set<Modifier> {
         switch self {
         case .selectPrevious, .selectNext, .open, .toggleCard, .back: []
-        case .refresh, .search, .settings, .closeWindow, .quit: [.command]
+        case .refresh, .search, .settings, .closeWindow, .quit, .commandPalette: [.command]
+        case .paletteNext, .palettePrevious: [.control]
         case .markAllRead, .copyForAgent, .remindMe: [.shift, .command]
         case .help: [.option]
         }
@@ -124,12 +129,16 @@ public enum Shortcut: String, Sendable, CaseIterable, Identifiable {
     /// What it does, as the help says it.
     public var title: String {
         switch self {
-        case .selectPrevious: "Select the alert above"
-        case .selectNext: "Select the alert below"
-        case .open: "Open the selected search result or Live card"
+        case .selectPrevious: "Select the alert above, or the palette's row"
+        case .selectNext: "Select the alert below, or the palette's row"
+        case .open: "Open the selected search result or Live card, or run the palette's row"
         case .toggleCard: "Open or close the selected Live card"
         case .back:
-            "Go back: Home from an Alertmanager, the latest in Live, out of a search or this help"
+            "Go back: Home from an Alertmanager, the latest in Live, out of a search, the "
+                + "palette or this help"
+        case .commandPalette: "Open or close the command palette: go to a channel, run a command"
+        case .paletteNext: "Select the palette's row below, like ↓"
+        case .palettePrevious: "Select the palette's row above, like ↑"
         case .refresh: "Refresh Home or an Alertmanager"
         case .markAllRead: "Mark the list's alerts as read"
         case .copyForAgent: "Copy the open alert for an agent"
@@ -145,6 +154,7 @@ public enum Shortcut: String, Sendable, CaseIterable, Identifiable {
     public var group: Group {
         switch self {
         case .selectPrevious, .selectNext, .open, .toggleCard, .back: .navigation
+        case .commandPalette, .paletteNext, .palettePrevious: .palette
         case .search: .search
         case .refresh, .markAllRead, .copyForAgent, .remindMe: .alerts
         case .help, .settings, .closeWindow, .quit: .app

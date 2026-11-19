@@ -29,6 +29,10 @@ struct InboxView: View {
     /// The search field's text and tokens, and the search shown, if any (`InboxSearch`).
     @State var query = SearchQuery()
     @State var activeSearch: OccurrenceSearch?
+    /// For the command palette (⌘P, `paletteCommands`): the channels visited in this
+    /// window, newest first, and its requests to focus the search field.
+    @State var recentChannels: [ChannelID] = []
+    @State var searchFocusRequests = 0
 
     private var detailRetry: Date? {
         model.detailProblem == nil ? nil : model.lastUpdated
@@ -52,12 +56,12 @@ struct InboxView: View {
             content
         }
         .modifier(
-            InboxSearch(model: model, query: $query, active: $activeSearch)
+            InboxSearch(
+                model: model, query: $query, active: $activeSearch,
+                focusRequests: searchFocusRequests)
         )
-        .environment(
-            \.reminders,
-            ReminderActions(model) { if revealed?.id == $0.id { revealed = $0 } }
-        )
+        .environment(\.reminders, reminderActions)
+        .modifier(CommandPaletteHost { paletteCommands })
         // A channel that moved to another instance (ADR 0006) has a new identity; leave the
         // old one for Live rather than asking the server for it every refresh.
         .onChange(of: model.channels) {
@@ -73,6 +77,7 @@ struct InboxView: View {
         // let go.
         .onChange(of: selectedScope) {
             liveKept = nil
+            rememberVisit()
             if let revealed, selectedScope == .channel(revealed.channel) {
                 selectedID = revealed.id
                 selectFirstUnreadIn = nil
@@ -224,69 +229,9 @@ struct InboxView: View {
 
     /// Also lets go of the open alert, so with read alerts hidden the list empties into "All
     /// caught up" rather than keeping one that would look as if it wasn't marked.
-    private func markAllRead(in scope: OccurrenceScope) {
+    func markAllRead(in scope: OccurrenceScope) {
         model.markAllRead(in: scope)
         selectedID = nil
         liveKept = nil
-    }
-
-    private func hidesRead(in scope: OccurrenceScope) -> Binding<Bool> {
-        Binding {
-            model.hidesRead(in: scope)
-        } set: {
-            model.setHidesRead($0, in: scope)
-        }
-    }
-
-    @ViewBuilder private func channelList(_ channel: ChannelID) -> some View {
-        let scope = OccurrenceScope.channel(channel)
-        if let occurrences = model.shownOccurrences(
-            in: scope, keeping: selectedID, revealing: revealed)
-        {
-            let hidingRead = model.hidesRead(in: scope)
-            AlertList(
-                occurrences: occurrences, readState: model.readState,
-                // Hidden while read alerts are: the feed already brought every unread one,
-                // so older pages would add nothing to show.
-                hasOlder: !hidingRead && model.hasOlder(in: scope),
-                lastUpdated: model.lastUpdated,
-                loadOlder: { await model.loadOlder(in: scope) },
-                hidesRead: hidesRead(in: scope),
-                selection: $selectedID, copy: copy, silence: SilenceActions(model))
-        } else {
-            loading(scope)
-        }
-    }
-
-    /// Until a list's first page arrives. If loading it failed, say why instead of
-    /// spinning; the next refresh retries.
-    @ViewBuilder private func loading(_ scope: OccurrenceScope) -> some View {
-        if let problem = model.problem {
-            UnreachableView(problem: problem, baseURL: model.baseURL) {
-                Task { await model.refresh(scope, visiting: true) }
-            }
-        } else {
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    /// Copies an occurrence for an agent, with its history when it's the open alert's,
-    /// which has loaded it.
-    private func copy(_ occurrence: Occurrence) {
-        let detail = model.detail?.occurrence.id == occurrence.id ? model.detail : nil
-        copyForAgent(occurrence, events: detail?.events)
-    }
-
-    @ViewBuilder private var occurrenceDetail: some View {
-        if let occurrence = selectedOccurrence {
-            AlertDetailView(
-                occurrence: occurrence,
-                detail: model.detail?.occurrence.id == occurrence.id ? model.detail : nil,
-                detailProblem: model.detailProblem,
-                silence: SilenceActions(model))
-        } else {
-            ContentUnavailableView("Select an alert", systemImage: "bell")
-        }
     }
 }

@@ -111,6 +111,8 @@ struct InboxSearch: ViewModifier {
     let model: InboxModel
     @Binding var query: SearchQuery
     @Binding var active: OccurrenceSearch?
+    /// Counts the command palette's requests to focus the field.
+    let focusRequests: Int
 
     @FocusState private var isFocused: Bool
 
@@ -123,6 +125,7 @@ struct InboxSearch: ViewModifier {
                 Text(token.title)
             }
             .searchFocused($isFocused)
+            .onChange(of: focusRequests) { isFocused = true }
             .onChange(of: query.text) { query.tokenize() }
             .onSubmit(of: .search) { query.tokenize(all: true) }
             .task(id: query) {

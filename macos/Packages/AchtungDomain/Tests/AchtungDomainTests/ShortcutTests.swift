@@ -65,6 +65,8 @@ private let takenByMacOS: [Keys] = [
     #expect(Shortcut.open.symbols == "↩")
     #expect(Shortcut.selectNext.symbols == "↓")
     #expect(Shortcut.toggleCard.symbols == "space")
+    #expect(Shortcut.commandPalette.symbols == "⌘P")
+    #expect(Shortcut.paletteNext.symbols == "⌃N")
 }
 
 @Test func keysAreSpokenByName() {
@@ -107,6 +109,9 @@ private let takenByMacOS: [Keys] = [
     #expect(Shortcut.toggleCard.matches(characters: " ", held: []))
     #expect(Shortcut.remindMe.matches(characters: "r", held: [.shift, .command]))
     #expect(!Shortcut.refresh.matches(characters: "r", held: [.shift, .command]))
+    #expect(Shortcut.palettePrevious.matches(characters: "p", held: [.control]))
+    #expect(!Shortcut.palettePrevious.matches(characters: "p", held: [.command]))
+    #expect(!Shortcut.commandPalette.matches(characters: "p", held: [.control]))
 }
 
 @Test func capsLockDoesNotChangeALetterShortcut() {
