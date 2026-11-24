@@ -49,6 +49,12 @@ export async function startPrometheusStub(): Promise<PrometheusStub> {
 
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://prometheus");
+    // The system may hand this port out again after another test file's stub closed, and an
+    // app there may still poll it: only requests under our prefix are this test's.
+    if (!url.pathname.startsWith("/prometheus/")) {
+      response.writeHead(404).end("not found");
+      return;
+    }
     requests.push({ path: url.pathname, query: url.searchParams, headers: request.headers });
     if (hanging) {
       return;
