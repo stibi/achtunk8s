@@ -24,13 +24,21 @@ The change stream (GET /api/events, ADR 0019) announces both, the occurrences ch
 time goes by (the scenario's events, resends, repeats), silences set or ended, and edits to
 the ignored alert names.
 
+Graphs (ADR 0026): eu-prod and us-prod have a metrics backend, staging has none. Their
+alerts about a workload's pod have a CPU graph (pod-cpu), made up but believable: a climb to
+the CPU limit before a latency or error alert, a crash-looping pod whose samples break off at
+each restart and end when it's replaced, a busy worker with a sidecar (two containers, so no
+request and limit lines: the alert names neither).
+
 Usage: python3 demo-server.py [port]   (macos/scripts/demo.sh starts it with the app)
 """
 
 import base64
 import datetime
 import json
+import math
 import queue
+import random
 import re
 import sys
 import threading
@@ -400,7 +408,8 @@ def detail(occurrence_id, now):
         for event_id, kind, time, remind_at in events(occurrence_id, now)
     ]
     others.sort(key=lambda o: o["startsAt"], reverse=True)
-    return {"occurrence": described, "events": history, "otherOccurrences": others[:20]}
+    return {"occurrence": described, "events": history, "otherOccurrences": others[:20],
+            "metricPanels": ["pod-cpu"] if cpu_shape(described) else []}
 
 
 IGNORED = ["InfoInhibitor", "Watchdog"]  # the ignored alert names (Settings)
@@ -679,10 +688,109 @@ def get(path, query, now):
                    for c in channels(now)["channels"]):
             return 404, {"error": f"Channel {instance}/{channel} not found"}
         return 200, page(matching(occurrences(now, instance, channel, status), query), cursor)
+    if match := re.fullmatch(r"/api/occurrences/(\d+)/metrics/([^/]+)", path):
+        if match.group(2) != "pod-cpu":
+            return 400, {"error": "params/panel must be pod-cpu"}
+        found = detail(int(match.group(1)), now)
+        if found is None:
+            return 404, {"error": "Occurrence not found"}
+        if not found["metricPanels"]:
+            return 404, {"error": "The occurrence has no such graph"}
+        return 200, cpu_graph(found["occurrence"], now)
     if match := re.fullmatch(r"/api/occurrences/(\d+)", path):
         found = detail(int(match.group(1)), now)
         return (200, found) if found else (404, {"error": "Occurrence not found"})
     return 404, {"error": "Not found"}
+
+
+# Which alerts have a CPU graph, and its shape: the instances with a metrics backend, and
+# alerts about a workload's pod. Alerts fired on demand climb to the limit.
+CPU_SHAPES = {"a1": "climb", "a2": "worker", "a3": "climb", "a4": "crashloop",
+              "b1": "climb", "b2": "climb", "b3": "crashloop"}
+METRICS_INSTANCES = ("eu-prod", "us-prod")
+
+
+def cpu_shape(described):
+    if described["instance"] not in METRICS_INSTANCES:
+        return None
+    key = described["sourceKey"]
+    return CPU_SHAPES.get(key, "climb" if key.startswith("d") else None)
+
+
+def metric_window(described, now):
+    """The server's window (domain/metrics.ts): the last 3 hours while firing, else from
+    2.5 hours before the start to 30 minutes after the end, 3 hours to a day, at 1 minute."""
+    if described["status"] == "firing":
+        end = now
+        start = end - datetime.timedelta(hours=3)
+    else:
+        starts = datetime.datetime.fromisoformat(described["startsAt"])
+        ends = datetime.datetime.fromisoformat(described["endsAt"])
+        end = min(now, ends + datetime.timedelta(minutes=30))
+        start = min(starts - datetime.timedelta(minutes=150), end - datetime.timedelta(hours=3))
+        end = min(end, start + datetime.timedelta(hours=24))
+    span = (end - start).total_seconds()
+    step = next((step for step in (60, 120, 300, 600, 900, 1800) if span / step <= 240), 3600)
+    floor = lambda t: datetime.datetime.fromtimestamp(  # noqa: E731
+        t.timestamp() // step * step, datetime.timezone.utc)
+    return floor(start), floor(end), step
+
+
+def cpu_graph(described, now):
+    """Made-up CPU per container, the same on every reload: noise is seeded by the time."""
+    shape = cpu_shape(described)
+    start, end, step = metric_window(described, now)
+    fired = datetime.datetime.fromisoformat(described["startsAt"])
+    ended = datetime.datetime.fromisoformat(described["endsAt"]) if described["endsAt"] else None
+    container = "worker" if shape == "worker" else "api"
+    request, limit = (0.5, 1.0) if shape == "worker" else (0.25, 0.5)
+    main, sidecar, requests, limits = [], [], [], []
+    time_ = start
+    while time_ <= end:
+        minutes = (time_ - fired).total_seconds() / 60
+        noise = random.Random(f"{described['sourceKey']}{time_.timestamp()}")
+        value = None
+        if shape == "climb":
+            # Steady, then a climb from 40 minutes before the alert to the limit, throttled
+            # there while it fires, back down once it resolved.
+            value = 0.16 + 0.02 * math.sin(minutes / 9) + noise.uniform(-0.015, 0.015)
+            if minutes > -40:
+                value += min((minutes + 40) / 40, 1) * 0.32
+            if ended and time_ > ended:
+                value = 0.18 + noise.uniform(-0.015, 0.015)
+            value = min(value, limit * 0.98 + noise.uniform(0, 0.01))
+        elif shape == "worker":
+            value = 0.62 + 0.18 * math.sin(minutes / 23) + noise.uniform(-0.05, 0.05)
+            if minutes > -20:
+                value += 0.2
+            value = min(value, limit * 0.97 + noise.uniform(0, 0.02))
+        elif shape == "crashloop":
+            # Builds up after each restart until it's killed, a few minutes of nothing while
+            # it restarts; after the alert resolved the pod is gone, replaced by another.
+            if ended and time_ > ended - datetime.timedelta(minutes=4):
+                value = None
+            elif minutes < 0:
+                value = 0.12 + noise.uniform(-0.01, 0.01)
+            else:
+                cycle = minutes % 9
+                value = None if cycle > 7 else 0.12 + cycle * 0.045 + noise.uniform(-0.01, 0.01)
+        if value is not None:
+            point = {"at": iso(time_), "value": round(max(value, 0), 4)}
+            main.append(point)
+            sidecar.append({"at": point["at"], "value": round(0.012 + noise.uniform(0, 0.006), 4)})
+            requests.append({"at": point["at"], "value": request})
+            limits.append({"at": point["at"], "value": limit})
+        time_ += datetime.timedelta(seconds=step)
+    series = [
+        {"name": container, "role": "usage", "points": main},
+        {"name": container, "role": "request", "points": requests},
+        {"name": container, "role": "limit", "points": limits},
+    ]
+    if shape == "worker":
+        series.append({"name": "istio-proxy", "role": "usage", "points": sidecar})
+    return {"panel": "pod-cpu", "unit": "cores", "from": iso(start), "to": iso(end),
+            "stepSeconds": step, "series": [one for one in series if one["points"]],
+            "truncated": False}
 
 
 FIRED_ON_DEMAND = [

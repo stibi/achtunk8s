@@ -33,6 +33,8 @@ struct InboxView: View {
     /// window, newest first, and its requests to focus the search field.
     @State var recentChannels: [ChannelID] = []
     @State var searchFocusRequests = 0
+    /// The open alert's graphs (ADR 0026), from the same server; made when the view appears.
+    @State var graphs: OccurrenceGraphs?
 
     private var detailRetry: Date? {
         model.detailProblem == nil ? nil : model.lastUpdated
@@ -112,6 +114,7 @@ struct InboxView: View {
                 selectFirstUnread()
             }
         }
+        .onAppear { graphs = graphs ?? OccurrenceGraphs(baseURL: model.baseURL) }
         .onDisappear {
             model.activeScope = nil
             viewing(nil)

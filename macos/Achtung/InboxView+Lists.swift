@@ -58,7 +58,9 @@ extension InboxView {
                 occurrence: occurrence,
                 detail: model.detail?.occurrence.id == occurrence.id ? model.detail : nil,
                 detailProblem: model.detailProblem,
-                silence: SilenceActions(model))
+                silence: SilenceActions(model),
+                graph: graphs?.load,
+                loadGraph: graphs.map { graphs in { await graphs.load($0, of: occurrence) } })
         } else {
             ContentUnavailableView("Select an alert", systemImage: "bell")
         }

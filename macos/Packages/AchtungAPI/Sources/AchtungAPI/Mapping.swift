@@ -128,7 +128,9 @@ extension Components.Schemas.OccurrenceDetail {
         OccurrenceDetail(
             occurrence: try occurrence.domain(),
             events: events.map(\.domain),
-            otherOccurrences: try otherOccurrences.map { try $0.domain() })
+            otherOccurrences: try otherOccurrences.map { try $0.domain() },
+            // Panels this client doesn't know yet are left out (ADR 0026).
+            metricPanels: (metricPanels ?? []).compactMap(MetricPanel.init(rawValue:)))
     }
 }
 

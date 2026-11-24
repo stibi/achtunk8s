@@ -10,9 +10,11 @@ import {
 } from "../db/queries.ts";
 import type { AlertState } from "../domain/alert.ts";
 import { type ChannelAddress, resolveChannel } from "../domain/channel.ts";
+import type { MetricPanelId } from "../domain/metrics.ts";
 import type { OccurrenceEvent } from "../domain/occurrence.ts";
 import type { OccurrenceSearch } from "../domain/search.ts";
 import type { SilencedOccurrence } from "../domain/silence.ts";
+import type { Metrics } from "./metrics.ts";
 import type { Silences } from "./silences.ts";
 
 /** A place in a channel's list, newest change first. The next page starts after it. */
@@ -54,6 +56,8 @@ export interface OccurrenceDetail {
   readonly events: readonly OccurrenceEvent[];
   /** Earlier and later occurrences of the same alert, newest first. */
   readonly otherOccurrences: readonly SilencedOccurrence[];
+  /** The graphs the occurrence has, from its instance's metrics backend (ADR 0026). */
+  readonly metricPanels: readonly MetricPanelId[];
 }
 
 const otherOccurrencesShown = 20;
@@ -106,6 +110,7 @@ async function pageOf(
 export async function getOccurrence(
   db: Database,
   silences: Silences,
+  metrics: Pick<Metrics, "panelsOf">,
   id: number,
 ): Promise<OccurrenceDetail | null> {
   const occurrence = await findOccurrence(db, id);
@@ -117,5 +122,12 @@ export async function getOccurrence(
     listOtherOccurrences(db, occurrence, otherOccurrencesShown),
   ]);
   const [shown, ...others] = await silences.annotate([occurrence, ...otherOccurrences]);
-  return shown === undefined ? null : { occurrence: shown, events, otherOccurrences: others };
+  return shown === undefined
+    ? null
+    : {
+        occurrence: shown,
+        events,
+        otherOccurrences: others,
+        metricPanels: metrics.panelsOf(occurrence),
+      };
 }
