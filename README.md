@@ -45,7 +45,8 @@ you silence it where it came from.
   marked apart from new ones.
 - **Home:** every Alertmanager at a glance: open alerts by severity, silenced, inhibited,
   its Watchdog, the Grafana IRM heartbeat, and alerts that never reached the inbox.
-- **Live:** every channel in one stream, beside a 24-hour timeline.
+- **Live:** every channel in one stream, one card per alert with its repeats folded in,
+  beside a 24-hour timeline.
 - **Silences** for one alert, or many from a Home tile, created on the Alertmanager the
   alert came from. Change or end them later.
 - **Search** across all channels by text, exact labels (`namespace=prod`), severity and
@@ -155,15 +156,23 @@ it for all, and anyone can change or cancel it
 
 ## Unread, Live and the timeline
 
-![Live in the macOS app: one-line alert cards from every channel, newest change first, one of them open with all its details, beside a 24-hour timeline with a marker where each alert fired and resolved, coloured by severity](docs/media/live.png)
+![Live in the macOS app: one-line alert cards from every channel, newest change first, one of them, an alert that fired five times since yesterday, open with its earlier occurrences and all its details, beside a 24-hour timeline with a marker where each alert fired and resolved, coloured by severity](docs/media/live.png)
 
 The sidebar groups channels under their instance, with unread and unread-critical
 badges. Channels and Live show only unread alerts by default, until you switch
 "Unread only" off for that list. Mark All as Read (⇧⌘K) clears a list without moving any
 baseline, so a later change stays unread. Live puts every channel in one stream next to a
-timeline of the last 24 hours. Its cards are one line each until you open one; opening it
-marks it read and closes the one before, so clicking (or ↓ and Return) down the stream
-clears it. Silencing the open card closes it too. Esc, or choosing Live again in the
+timeline of the last 24 hours. It has one card per alert (same labels, same channel):
+when an alert fires again, its card moves to the top instead of a new card being added,
+and a flapping alert shows how often, e.g. "5× since 08:12". The card shows the latest
+occurrence; opened, it lists the earlier ones with when each fired and resolved and how
+long it lasted. The count covers what Live has loaded (usually the last 24 hours); when
+that may not be all of them, it leaves out the "since". The timeline keeps a marker for
+every fire and resolve; clicking an earlier one opens its alert's card with that
+occurrence highlighted. Cards are one line each until you open one; opening it marks it
+read, every occurrence in it, and closes the one before, so clicking (or ↓ and Return)
+down the stream clears it. A card is unread while any of its occurrences is; with
+"Unread only" on, it still lists all of them, the unread ones marked. Silencing the open card closes it too. Esc, or choosing Live again in the
 sidebar, closes the open card and goes back to the newest. When it is all caught up, the
 app's rat takes a coffee break:
 

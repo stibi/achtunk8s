@@ -19,7 +19,7 @@ struct InboxView: View {
     @State var revealed: Occurrence?
     /// Live's expanded card (`LiveView.kept`), here so it stays expanded when the user
     /// comes back to Live, and so marking all read can let it go.
-    @State var liveKept: Int?
+    @State var liveKept: AlertIdentity?
     /// Counts the times Live was chosen while shown, each a request to go back to the
     /// latest (`LiveStream.latestRequest`).
     @State var liveLatestRequest = 0

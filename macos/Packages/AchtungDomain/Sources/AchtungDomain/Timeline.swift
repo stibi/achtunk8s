@@ -85,7 +85,7 @@ public struct TimelineCluster: Sendable, Hashable, Identifiable {
     /// How many markers it holds: an alert that fired and resolved within it counts twice.
     public var count: Int { markers.count }
     /// How many alerts its markers belong to.
-    public var alertCount: Int { Set(markers.map(\.occurrence.id)).count }
+    public var alertCount: Int { Set(markers.map(\.occurrence.alertIdentity)).count }
     /// The marker clicking the cluster goes to.
     public var newest: TimelineMarker { markers[0] }
     /// Where the cluster is drawn: at its newest marker, so neighbouring clusters, which

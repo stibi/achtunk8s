@@ -121,16 +121,15 @@ public struct ReadState: Sendable, Codable, Equatable {
     }
 
     /// Changed since the user last left the app. Before their first visit, nothing is.
-    public func isNew(_ occurrence: Occurrence) -> Bool {
+    public func isNew(_ item: some Changing) -> Bool {
         guard let seenUntil else { return false }
-        return occurrence.lastEventAt > seenUntil
+        return item.lastEventAt > seenUntil
     }
 
     /// A list in the order the user reads it: what changed since they last left the app,
     /// above the "new" divider, then the rest, each in the list's own order.
-    public func newFirst(_ occurrences: [Occurrence]) -> (new: [Occurrence], earlier: [Occurrence])
-    {
-        (occurrences.filter { isNew($0) }, occurrences.filter { !isNew($0) })
+    public func newFirst<Item: Changing>(_ items: [Item]) -> (new: [Item], earlier: [Item]) {
+        (items.filter { isNew($0) }, items.filter { !isNew($0) })
     }
 
     /// The user is looking at `channel` as the server last described it.
@@ -239,3 +238,11 @@ public struct ReadState: Sendable, Codable, Equatable {
         return byID
     }
 }
+
+/// What a list shows and the read state orders by its last change: an occurrence, or a
+/// Live card's alert (`LiveAlert`).
+public protocol Changing {
+    var lastEventAt: Date { get }
+}
+
+extension Occurrence: Changing {}

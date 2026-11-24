@@ -161,6 +161,18 @@ REMOTE_WRITE = alert(
 STATEFUL_SET = alert(
     "c4", "staging", "ci", "info", "KubeStatefulSetUpdateNotRolledOut", None, "build-cache",
     "ci")
+# Flaps: fires and resolves several times a day, for Live's card with its occurrences folded
+# in.
+INGRESS_VOLUME = alert(
+    "e1", "eu-prod", "platform", "warning", "IngressRequestVolumeHigh",
+    "ingress-nginx serves more than 2,000 requests/s for 5 minutes.", "ingress-nginx", "ingress")
+# One name, two label sets: two alerts, two cards.
+SEARCH_MEMORY = alert(
+    "e2", "eu-prod", "platform", "warning", "ContainerMemoryNearLimit",
+    "search-api uses 91% of its memory limit.", "search-api")
+RESIZER_MEMORY = alert(
+    "e3", "eu-prod", "platform", "warning", "ContainerMemoryNearLimit",
+    "image-resizer uses 94% of its memory limit.", "image-resizer")
 
 # Each occurrence: its alert and the events that change its state, in minutes relative to
 # the start. Events ahead of the start happen while the demo runs; an occurrence appears
@@ -195,6 +207,14 @@ SCENARIO = [
     # Over a day ago, so Home and the timeline don't show them.
     (REMOTE_WRITE, [("fired", -27 * 60), ("resolved", -26 * 60)]),
     (STATEFUL_SET, [("fired", -28 * 60), ("resolved", -27 * 60)]),
+    # Appended, so the ids above stay as they were.
+    (INGRESS_VOLUME, [("fired", -11 * 60), ("resolved", -10 * 60 - 40)]),
+    (INGRESS_VOLUME, [("fired", -7 * 60), ("resolved", -6 * 60 - 45)]),
+    (INGRESS_VOLUME, [("fired", -4 * 60 - 10), ("resolved", -3 * 60 - 55)]),
+    (INGRESS_VOLUME, [("fired", -110), ("resolved", -95)]),
+    (INGRESS_VOLUME, [("fired", -20)]),
+    (SEARCH_MEMORY, [("fired", -140), ("resolved", -120)]),
+    (RESIZER_MEMORY, [("fired", -75)]),
 ]
 # A channel with nothing in it yet, as a new receiver URL would create.
 EMPTY_CHANNELS = [("us-prod", "search")]

@@ -304,13 +304,20 @@ The identity below is a contract that features build on
   last looked. Instances with anything unread come first, then the rest, each group by
   name; channels inside an instance follow the same rule (`Instance.sidebar` in
   AchtungDomain holds these rules). Live (`GET /api/occurrences`) is one stream of
-  every channel's occurrences (`LiveStream`), each as a card (`LiveCard`). A card is
+  every channel's alerts (`LiveStream`), each as a card (`LiveCard`): the client folds the
+  loaded occurrences of one alert identity (source, channel with its instance, source key;
+  never the name) into one `LiveAlert` in AchtungDomain, which orders the cards by the
+  latest change to any of their occurrences and shows the one that started last. The
+  expanded card lists the earlier ones (`LiveHistory`). Only loaded occurrences fold, so a
+  count can be lower than the server's; it states its span ("5× since 08:12") only when
+  every occurrence started since then is loaded. A card is unread while any of its
+  occurrences is, and opening it marks them all read. A card is
   collapsed to one line, about as tall as its icon: the header (icon, title, and under it
   status, severity and age) on the left, and on the right the summary, the start and end times and
   the instance and channel; the summary truncates first, and on cards narrower than 600
   points the times give way (the title's tooltip has them). Clicking a collapsed card, or
   Return or Space on the one ↑ and ↓ moved to, expands it into all its details and marks it
-  read; it is then the list's open alert (`kept` in `ReadState.shown`), so expanding the
+  read; it is then the list's open alert (`kept` in `LiveAlert.shown`), so expanding the
   next one collapses it, and with read alerts hidden it leaves the stream. Clicking the
   expanded header collapses it. The expanded card holds still on screen while what's
   above it changes (a card collapsing or leaving, new alerts arriving): the stream scrolls
@@ -324,7 +331,8 @@ The identity below is a contract that features build on
   anything of it was firing, open to now while something still fires. Markers closer than
   18 points become one, drawn at its newest marker, with the number of alerts in it. Markers are buttons with
   an accessibility label; hovering shows the details, and clicking scrolls the stream to
-  the card (a cluster's newest), expands and highlights it. Below 730 points of width the timeline
+  the card of the marker's alert (a cluster's newest), expands and highlights it, and
+  highlights the marker's occurrence in the card's history when it isn't the latest. Below 730 points of width the timeline
   goes away before the cards would get narrower. A channel
   (`GET /api/instances/{instance}/channels/{slug}/occurrences`; the deprecated route by
   name alone is not used) is a list in a fixed-width column (summaries wrap), with a

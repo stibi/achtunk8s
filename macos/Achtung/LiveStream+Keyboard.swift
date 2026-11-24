@@ -25,13 +25,13 @@ extension LiveStream {
     /// to the next one.
     func toggleKeyboardCard() -> KeyPress.Result {
         guard let id = keyboardCard ?? kept, order.contains(id),
-            let occurrence = shown.first(where: { $0.id == id })
+            let alert = shown.first(where: { $0.id == id })
         else { return .ignored }
         keyboardCard = id
         if kept == id {
             collapseHandingOnKeyboard()
         } else {
-            reveal(occurrence)
+            reveal(alert)
         }
         return .handled
     }
@@ -41,8 +41,8 @@ extension LiveStream {
     func collapseHandingOnKeyboard() {
         let order = order
         if let id = kept, keyboardCard == id, let index = order.firstIndex(of: id),
-            let occurrence = shown.first(where: { $0.id == id }),
-            hidesRead && readState.isRead(occurrence)
+            let alert = shown.first(where: { $0.id == id }),
+            hidesRead && alert.isRead(in: readState)
         {
             let rest = order.filter { $0 != id }
             if !rest.isEmpty { keyboardCard = rest[min(index, rest.count - 1)] }

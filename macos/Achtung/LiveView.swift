@@ -1,10 +1,13 @@
 import AchtungDomain
 import SwiftUI
 
-/// Every channel's occurrences as one stream of cards (`LiveStream`), most recently changed
-/// first. Beside it, the last 24 hours as a timeline (`LiveTimeline`); clicking a marker
-/// scrolls to its card, expands and highlights it. The timeline goes away before the cards
-/// would get narrower than `minimumCardsWidth`.
+/// Every channel's alerts as one stream of cards (`LiveStream`), most recently changed
+/// first: one card per alert, its loaded occurrences folded into it (`LiveAlert`). Beside
+/// it, the last 24 hours as a timeline (`LiveTimeline`), still one marker per fire and
+/// resolve of each occurrence; clicking one scrolls to its alert's card, expands and
+/// highlights it, and highlights the occurrence in the card's history when it isn't the
+/// latest. The timeline goes away before the cards would get narrower than
+/// `minimumCardsWidth`.
 struct LiveView: View {
     private static let minimumCardsWidth: CGFloat = 520
     private static let timelineMargin: CGFloat = 10
@@ -19,14 +22,20 @@ struct LiveView: View {
     let loadOlder: () async -> Void
     @Binding var hidesRead: Bool
     /// The expanded card (`LiveStream.kept`).
-    @Binding var kept: Int?
-    let markRead: (Occurrence) -> Void
+    @Binding var kept: AlertIdentity?
+    let markRead: (LiveAlert) -> Void
     let silence: SilenceActions
     /// Requests to go back to the latest (`LiveStream.latestRequest`).
     let latestRequest: Int
 
     /// The latest click on a timeline marker.
     @State private var timelineClick: LiveStream.TimelineClick?
+
+    /// Folded as far as the feed is loaded: while older pages remain, it reaches for
+    /// certain back to its oldest change.
+    private var alerts: [LiveAlert] {
+        LiveAlert.fold(occurrences, loadedSince: hasOlder ? occurrences.last?.lastEventAt : nil)
+    }
 
     var body: some View {
         if occurrences.isEmpty && !hasOlder {
@@ -41,7 +50,7 @@ struct LiveView: View {
                     - (hasTimeline ? LiveTimeline.width + Self.timelineMargin : 0)
                 HStack(spacing: 0) {
                     LiveStream(
-                        occurrences: occurrences, readState: readState, hasOlder: hasOlder,
+                        alerts: alerts, readState: readState, hasOlder: hasOlder,
                         lastUpdated: lastUpdated, loadOlder: loadOlder, hidesRead: $hidesRead,
                         kept: $kept, markRead: markRead, silence: silence,
                         showsTimes: cardWidth >= LiveCard.timesWidth, timelineClick: timelineClick,

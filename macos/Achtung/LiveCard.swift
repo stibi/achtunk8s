@@ -1,21 +1,26 @@
 import AchtungDomain
 import SwiftUI
 
-/// One occurrence in Live. Collapsed, as every card starts, it is about as tall as the
-/// alert's icon: the header on the left, and on the right the summary, the exact times and
-/// the channel. Clicking it anywhere expands it into all its details, with the buttons;
-/// clicking the expanded header (or the chevron) collapses it again. Unread cards carry a
-/// dot (a circular arrow when resent) and an accent border; read ones fade.
+/// One alert in Live, showing its latest occurrence, with the earlier ones it has loaded
+/// folded in (`LiveAlert`). Collapsed, as every card starts, it is about as tall as the
+/// alert's icon: the header on the left, with how many times it occurred when more than
+/// once, and on the right the summary, the exact times and the channel. Clicking it
+/// anywhere expands it into all its details, with the buttons, and the earlier occurrences
+/// (`LiveHistory`); clicking the expanded header (or the chevron) collapses it again. Unread
+/// cards, any of whose occurrences is unread, carry a dot (a circular arrow when resent) and
+/// an accent border; read ones fade.
 struct LiveCard: View {
     /// Narrower than this, a collapsed card leaves the times out of its right side: the
     /// relative age on the left stays, and the tooltip on the title has them.
     static let timesWidth: CGFloat = 600
 
-    let occurrence: Occurrence
-    let isRead: Bool
+    let alert: LiveAlert
+    let readState: ReadState
     let isExpanded: Bool
     /// Shown briefly after a timeline marker was clicked.
     let isHighlighted: Bool
+    /// The clicked marker's occurrence, highlighted in the history with the card.
+    let highlightedOccurrence: Int?
     /// Where the keyboard is in the stream (↑ and ↓ move it).
     let hasKeyboardFocus: Bool
     /// Leaves the times out when the card is narrow (`timesWidth`).
@@ -26,15 +31,23 @@ struct LiveCard: View {
     /// A click on the expanded card marks it read again, after a resend while it's open.
     let markRead: () -> Void
 
+    /// The card shows its latest occurrence; the buttons act on it.
+    private var occurrence: Occurrence { alert.latest }
+    private var isRead: Bool { alert.isRead(in: readState) }
+    /// What the unread mark tells: why the card is unread, else its latest.
+    private var marked: Occurrence { alert.lastUnread(in: readState) ?? occurrence }
+
     var body: some View {
         Group {
             if isExpanded {
                 expanded
                     .padding(20)
             } else {
-                CollapsedLiveCard(occurrence: occurrence, isRead: isRead, showsTimes: showsTimes)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 14)
+                CollapsedLiveCard(
+                    alert: alert, marked: marked, isRead: isRead, showsTimes: showsTimes
+                )
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -75,11 +88,12 @@ struct LiveCard: View {
         }
     }
 
-    /// Today's full card: the channel, every detail of the alert and its delivery.
+    /// The full card: the channel, every detail of the latest occurrence with the earlier
+    /// ones under its buttons, and the latest's delivery.
     private var expanded: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
-                UnreadMark(occurrence: occurrence, isRead: isRead)
+                UnreadMark(occurrence: marked, isRead: isRead)
                 Text("\(occurrence.channel.instance) · #\(occurrence.channel.slug)")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
@@ -90,7 +104,13 @@ struct LiveCard: View {
                     .help("Collapse")
             }
             VStack(alignment: .leading, spacing: 24) {
-                AlertDetails(occurrence: occurrence, silence: silence, collapse: collapse)
+                AlertDetails(occurrence: occurrence, silence: silence, collapse: collapse) {
+                    if !alert.earlier.isEmpty {
+                        LiveHistory(
+                            alert: alert, readState: readState,
+                            highlighted: highlightedOccurrence)
+                    }
+                }
                 OccurrenceFacts(occurrence: occurrence)
             }
         }
@@ -98,7 +118,8 @@ struct LiveCard: View {
 }
 
 /// A collapsed card's one line. Left: the unread mark, the severity icon, the title and
-/// under it the status (a row that drops the age, then wraps, when there's no room).
+/// under it the status, led by the count of occurrences when there are several (a row that
+/// drops the age, then wraps, when there's no room).
 /// Right: the summary, the times and the channel, one line each. The title gets its width
 /// first and truncates last; the summary truncates first.
 private struct CollapsedLiveCard: View {
@@ -106,16 +127,26 @@ private struct CollapsedLiveCard: View {
     /// never shrink to a lone "…".
     private static let rightMinimumWidth: CGFloat = 120
 
-    let occurrence: Occurrence
+    let liveAlert: LiveAlert
+    /// The occurrence the unread mark is about (`LiveCard.marked`).
+    let marked: Occurrence
     let isRead: Bool
     let showsTimes: Bool
 
+    init(alert: LiveAlert, marked: Occurrence, isRead: Bool, showsTimes: Bool) {
+        self.liveAlert = alert
+        self.marked = marked
+        self.isRead = isRead
+        self.showsTimes = showsTimes
+    }
+
+    private var occurrence: Occurrence { liveAlert.latest }
     private var alert: IncomingAlert { occurrence.alert }
 
     var body: some View {
         SilenceState(occurrence: occurrence) { isSilenced in
             HStack(spacing: 14) {
-                UnreadMark(occurrence: occurrence, isRead: isRead)
+                UnreadMark(occurrence: marked, isRead: isRead)
                 SeverityIcon(severity: alert.severity)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(alert.title)
@@ -156,33 +187,37 @@ private struct CollapsedLiveCard: View {
 
     @ViewBuilder private func status(silencedUntil: Date?) -> some View {
         let resurfaced = Resurfaced(occurrence)
-        let remindAt = occurrence.remindAt
+        // An earlier occurrence's pending reminder stays in view when the latest has none.
+        let remindAt = occurrence.remindAt ?? liveAlert.earlierReminders.first?.remindAt
         // The rows keep their pills whole: when one doesn't fit, the next takes its place.
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
+                RepeatCount(alert: liveAlert)
                 AlertStatus(
                     alert: alert, silencedUntil: silencedUntil, resurfaced: resurfaced,
                     remindAt: remindAt)
             }
             .fixedSize()
             HStack(spacing: 8) {
+                RepeatCount(alert: liveAlert)
                 AlertStatus(
                     alert: alert, silencedUntil: silencedUntil, resurfaced: resurfaced,
                     remindAt: remindAt, showsAge: false)
             }
             .fixedSize()
             FlowLayout(spacing: 8) {
+                RepeatCount(alert: liveAlert)
                 AlertStatus(
                     alert: alert, silencedUntil: silencedUntil, resurfaced: resurfaced,
                     remindAt: remindAt, showsAge: false)
             }
         }
     }
+}
 
-    /// The time alone today, else with the day: short enough for the card's right side.
-    private func dayAndTime(_ date: Date) -> String {
-        Calendar.current.isDateInToday(date)
-            ? date.formatted(date: .omitted, time: .shortened)
-            : date.formatted(.dateTime.day().month(.abbreviated).hour().minute())
-    }
+/// The time alone today, else with the day: short enough for a collapsed card.
+func dayAndTime(_ date: Date) -> String {
+    Calendar.current.isDateInToday(date)
+        ? date.formatted(date: .omitted, time: .shortened)
+        : date.formatted(.dateTime.day().month(.abbreviated).hour().minute())
 }

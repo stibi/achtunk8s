@@ -63,16 +63,43 @@ struct OccurrenceHistory: View {
                     Text("Other occurrences")
                         .font(.headline)
                     ForEach(detail.otherOccurrences) { other in
-                        HStack(spacing: 8) {
-                            StatusPill(alert: other.alert)
-                            Text("Started \(exactDateTime(other.alert.startsAt))")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
+                        OccurrenceSpanRow(occurrence: other)
                     }
                 }
             }
         }
+    }
+}
+
+/// One occurrence of an alert in a list of them: whether it fires, when it fired and
+/// resolved, and how long it lasted. The detail pane's other occurrences and a Live card's
+/// earlier ones.
+struct OccurrenceSpanRow: View {
+    let occurrence: Occurrence
+
+    private var alert: IncomingAlert { occurrence.alert }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            StatusPill(alert: alert)
+            Text(span(dayAndTime))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .help(span(exactDateTime))
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "Fired 14:02 · Resolved 14:07 · 5m", or "Fired 14:02" while it fires.
+    private func span(_ format: (Date) -> String) -> String {
+        let fired = "Fired \(format(alert.startsAt))"
+        guard case .resolved(let endsAt) = alert.state else { return fired }
+        let lasted = Duration.seconds(max(endsAt.timeIntervalSince(alert.startsAt), 0))
+            .formatted(
+                .units(
+                    allowed: [.days, .hours, .minutes, .seconds], width: .narrow,
+                    maximumUnitCount: 2))
+        return "\(fired) · Resolved \(format(endsAt)) · \(lasted)"
     }
 }
 

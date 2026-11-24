@@ -72,6 +72,13 @@ extension InboxModel {
         }
     }
 
+    /// A Live card: every occurrence folded into it.
+    func markRead(_ alert: LiveAlert) {
+        for occurrence in alert.occurrences {
+            markRead(occurrence)
+        }
+    }
+
     /// Marks the occurrences with these ids read, where the feed has them unread; any it
     /// doesn't have are older than the read baseline, so read already.
     func markRead(ids: Set<Int>) {

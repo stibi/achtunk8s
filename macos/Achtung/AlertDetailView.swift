@@ -63,8 +63,9 @@ struct AlertDetailView: View {
 
 /// What the source reported about one occurrence: header, the summary and description to
 /// read, links and the silence and copy buttons, then every annotation and every label,
-/// one per line. Shared by the channel detail pane and the Live cards.
-struct AlertDetails: View {
+/// one per line. Shared by the channel detail pane and the Live cards, which put the
+/// alert's earlier occurrences (`history`) under the buttons, before the annotations.
+struct AlertDetails<History: View>: View {
     let occurrence: Occurrence
     let silence: SilenceActions
     /// The history, for "Copy for Agent", once it has loaded; Live's cards don't have it.
@@ -73,6 +74,7 @@ struct AlertDetails: View {
     var hasCopyShortcut = false
     /// Collapses a Live card when its header is clicked; nil in the detail pane.
     var collapse: (() -> Void)?
+    @ViewBuilder var history: () -> History
 
     private var alert: IncomingAlert { occurrence.alert }
 
@@ -99,6 +101,7 @@ struct AlertDetails: View {
                     }
                 }
             }
+            history()
             AnnotationsSection(alert: alert)
             LabelsSection(alert: alert)
         }
@@ -110,6 +113,20 @@ struct AlertDetails: View {
             alert: alert, silencedUntil: isSilenced ? occurrence.silencedUntil : nil,
             resurfaced: Resurfaced(occurrence), remindAt: occurrence.remindAt,
             collapse: collapse)
+    }
+}
+
+extension AlertDetails where History == EmptyView {
+    init(
+        occurrence: Occurrence, silence: SilenceActions, events: [OccurrenceEvent]? = nil,
+        hasCopyShortcut: Bool = false, collapse: (() -> Void)? = nil
+    ) {
+        self.init(
+            occurrence: occurrence, silence: silence, events: events,
+            hasCopyShortcut: hasCopyShortcut, collapse: collapse
+        ) {
+            EmptyView()
+        }
     }
 }
 
