@@ -67,7 +67,9 @@ you silence it where it came from.
   then shows the handler's progress and, when it is done, what it found, for everyone.
   Handlers are written against a small HTTP protocol
   ([`docs/handover-protocol.md`](docs/handover-protocol.md)), with an SDK for TypeScript
-  ([`sdk/typescript`](sdk/typescript/README.md)). No handler ships with Achtung yet.
+  ([`sdk/typescript`](sdk/typescript/README.md)). The first handler,
+  [`handlers/llm-analysis`](handlers/llm-analysis/README.md), asks a language model, hosted
+  or local, what an alert means.
 - **Keeps itself up to date:** the app checks for a new build once a day and installs
   it when you say so.
 - **Keyboard shortcuts** for search, refresh, Mark All as Read, Copy for Agent, Remind
@@ -335,8 +337,8 @@ to that API. [ADR 0026](docs/adr/0026-metrics-of-the-alerted-resource.md) (propo
   the switches on Home.
 - **Investigate with an agent** (in progress). A handler that gives a handed-over alert
   to a coding agent, which investigates read-only and posts its findings back to the
-  alert. The handover itself is built (above); the handlers are next: one that starts
-  an agent in a terminal, one that asks a language model
+  alert. The handover itself is built (above), and so is a handler that asks a
+  language model; the one that starts an agent in a terminal is next
   ([plan](docs/plans/agent-handover-plugins.md)).
 - **Acknowledgement** (planned): mark an alert as being worked on, for everyone.
 - **Users and collaboration** (future direction). Sign-in through OIDC, notes on an

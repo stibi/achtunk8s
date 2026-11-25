@@ -22,6 +22,9 @@ if [[ -n "$(git status --porcelain -- server)" ]] && ! output=$(pnpm --dir serve
 elif [[ -n "$(git status --porcelain -- sdk/typescript)" ]] &&
   ! output=$(pnpm --dir sdk/typescript run check 2>&1); then
   failed="pnpm check fails in sdk/typescript/"
+elif [[ -n "$(git status --porcelain -- handlers sdk/typescript)" ]] &&
+  ! output=$(pnpm --recursive --filter './handlers/*' run check 2>&1); then
+  failed="pnpm check fails in handlers/"
 elif [[ -n "$(git status --porcelain -- website docs/media macos/Icon)" ]] &&
   ! output=$(pnpm --dir website run check 2>&1); then
   failed="pnpm check fails in website/"

@@ -346,6 +346,11 @@ An alert can be handed over to a plugin, e.g. to have an agent investigate it
   `HandoverWatch` remembers, in memory, the handovers this Mac asked for; when one ends,
   this Mac gets a notification ("… finished: …", Settings › Notifications), and no other
   Mac does. Demo mode has two made-up plugins (`demo-server.py`).
+- **Handlers in this repository** (`handlers/`, workspace packages written with the SDK,
+  checked together: `pnpm --recursive --filter './handlers/*' run check`).
+  `handlers/llm-analysis` asks a language model what an alert means, over the
+  OpenAI-compatible chat API, hosted or local: fixed instructions, the alert fenced as
+  data, named labels and annotations left out, no tools. It has its own `Dockerfile`.
 - A result is untrusted text from another program. Links must be `http` or `https`
   (checked on the way in); clients render the body as text and load nothing from it.
 

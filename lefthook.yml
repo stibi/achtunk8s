@@ -10,6 +10,11 @@ pre-commit:
       root: sdk/typescript/
       glob: "sdk/typescript/**"
       run: pnpm run check
+    - name: handlers
+      glob:
+        - "handlers/**"
+        - "sdk/typescript/**"
+      run: pnpm --recursive --filter './handlers/*' run check
     - name: website
       # The site also shows the app's media and icon. No `root:` here: lefthook would
       # then drop the staged files outside website/ before matching these globs.

@@ -36,6 +36,7 @@ check doesn't run them against the real server: after changing a scenario, run t
 pnpm --dir sdk/typescript run check        # typecheck, lint, dead code, duplication, tests (no Docker)
 pnpm --dir sdk/typescript run fix          # auto-fix formatting and lint
 pnpm --dir sdk/typescript run dev          # a fake Achtung server on :8790, to try a handler against
+pnpm --recursive --filter './handlers/*' run check   # the handlers in handlers/, each a package written with the SDK
 ```
 
 The public website (achtunk8s.io) is an Astro static site in `website/`. Pushes to `main`

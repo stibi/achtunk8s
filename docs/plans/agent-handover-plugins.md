@@ -1,7 +1,7 @@
 # Plan: hand an alert over to a plugin (handlers, actions, handovers)
 
 Status: **agreed 2026-11-15; phases 2 (the server), 3 (the SDK) and 4 (the macOS client)
-are built**, the others are in progress or not started. The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
+and 6 (the model handler) are built**, the others are in progress or not started. The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
 was built and where it differs from the sketch below: [Progress](#progress).
 It changes the public API and the schema, so each phase waits for the user's OK
 (AGENTS.md). Prerequisite: the change stream (ADR 0019) merged to `main`.
@@ -793,6 +793,14 @@ on a Mac and seen working in demo mode. Differences from the plan:
   dialogs on the Mac that built it covered the window. The website has no section for
   it yet for that reason; the README describes it.
 - The `AchtungAPI` fixtures now cover actions and handovers.
+
+**Phase 6, `handlers/llm-analysis`: built** (2026-11-25), with its container image and
+an example manifest. Tested against the SDK's fake server and a fake model API. Open:
+
+- **It has not been run against a real model, hosted or local.** No model API key and
+  no local model server were at hand. The local-model spike the plan requires is
+  therefore still owed; the README has the setup (Ollama) and says it is untried.
+- It is not deployed anywhere.
 
 Phase 1 (the spike on the VM) was not done first: it needs the agent's own read-only
 credentials (decision 8). It is still due before phase 5.

@@ -40,6 +40,23 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --dir sdk/typescript run check
+      # The handlers are written against the SDK, so they are checked with it.
+      - run: pnpm --recursive --filter './handlers/*' run check
+
+  handler-images:
+    name: Handler images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Built only, never pushed, like the server's image.
+      - run: docker build -f handlers/llm-analysis/Dockerfile -t achtung-llm-analysis:ci .
+      - name: Starts and fails fast without its configuration
+        run: |
+          if docker run --rm --read-only achtung-llm-analysis:ci > out.log 2>&1; then
+            echo "expected a configuration error"; exit 1
+          fi
+          grep -q ACHTUNG_URL out.log
 
   website:
     name: Website check
