@@ -323,6 +323,13 @@ An alert can be handed over to a plugin, e.g. to have an agent investigate it
   with `HANDLER_TOKENS` set, a hook on the handler routes requires the handler's bearer
   token, compared in constant time; a handler acts only under its own id. The client
   routes stay open (ADR 0002).
+- **The SDK** (`sdk/typescript/`, a workspace package of its own with its own `check`):
+  `runHandler` (register, claim, renew, answer), `agentReport` (the alert as Markdown,
+  the same text as the client's Copy for Agent), a fake server for plugin authors
+  (`pnpm --dir sdk/typescript run dev`) and the protocol as conformance scenarios. The
+  server's tests run those scenarios against the real server
+  (`test/http/handover-conformance.test.ts`), and the SDK's run them against the fake, so
+  the two can't drift apart unnoticed. The SDK's types are written by hand from the spec.
 - A result is untrusted text from another program. Links must be `http` or `https`
   (checked on the way in); clients render the body as text and load nothing from it.
 

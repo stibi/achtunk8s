@@ -14,6 +14,10 @@ It is frozen as `v1` once two handlers of different kinds are built against it. 
 then on it only grows: new optional request fields, new response fields, new routes. A
 handler must ignore fields it doesn't know.
 
+In TypeScript, the SDK in [`sdk/typescript`](../sdk/typescript/README.md) writes the loop
+below for you, and brings a fake server to try and test a handler against. In any other
+language, this page and the `curl` handler at its end are what you need.
+
 ## The loop
 
 ```

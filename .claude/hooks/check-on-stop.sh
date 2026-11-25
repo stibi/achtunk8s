@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Stop hook: Claude may not finish while the server has uncommitted changes that fail
-# `pnpm check`, the website (or the media and icon it shows) has changes that fail its
+# Stop hook: Claude may not finish while the server or the SDK has uncommitted changes that
+# fail `pnpm check`, the website (or the media and icon it shows) has changes that fail its
 # `pnpm check`, infra/ has changes that fail infra/scripts/check.sh, or (on macOS only)
 # macos/ has changes that fail macos/scripts/check.sh.
 # Exit 2 blocks the stop and hands the failure output back to Claude.
@@ -19,6 +19,9 @@ failed=""
 output=""
 if [[ -n "$(git status --porcelain -- server)" ]] && ! output=$(pnpm --dir server run check 2>&1); then
   failed="pnpm check fails in server/"
+elif [[ -n "$(git status --porcelain -- sdk/typescript)" ]] &&
+  ! output=$(pnpm --dir sdk/typescript run check 2>&1); then
+  failed="pnpm check fails in sdk/typescript/"
 elif [[ -n "$(git status --porcelain -- website docs/media macos/Icon)" ]] &&
   ! output=$(pnpm --dir website run check 2>&1); then
   failed="pnpm check fails in website/"

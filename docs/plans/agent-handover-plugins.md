@@ -1,7 +1,7 @@
 # Plan: hand an alert over to a plugin (handlers, actions, handovers)
 
-Status: **agreed 2026-11-15; phase 2 (the server) is built**, the other phases are not
-started. The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
+Status: **agreed 2026-11-15; phases 2 (the server) and 3 (the SDK) are built**, the
+others are in progress or not started. The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
 was built and where it differs from the sketch below: [Progress](#progress).
 It changes the public API and the schema, so each phase waits for the user's OK
 (AGENTS.md). Prerequisite: the change stream (ADR 0019) merged to `main`.
@@ -766,6 +766,20 @@ differ from the sketch in section 2, they are right. The differences:
   Swift on the machine this was built on). The Swift client generates only the
   `client` tag, so the handler routes don't reach it; the new client routes and the
   `handovers` change kind do.
+
+**Phase 3, the SDK: built** (2026-11-25), in `sdk/typescript`. Differences from the plan:
+
+- The protocol types are written by hand, not generated from the spec. Generated types
+  would be a large file under rules meant for written code; the conformance scenarios,
+  which the server's tests run against the real server, hold the hand-written ones to it.
+- `agentReport` is tested against the same alert and the same expected text as the
+  Swift `AgentReport` test, copied into the SDK's test, not read from one shared file.
+- The fake server is started with `pnpm --dir sdk/typescript run dev`; the
+  `achtung-handover` command exists for when the package is installed elsewhere.
+- The `curl` handler in the protocol page is still not run in CI. The conformance
+  scenarios cover the same calls.
+- The SDK also cleans and cuts a result to the server's limits (one-line summary, 64 KiB
+  body, no NUL characters), so an agent's output isn't lost to a 400.
 
 Phase 1 (the spike on the VM) was not done first: it needs the agent's own read-only
 credentials (decision 8). It is still due before phase 5.

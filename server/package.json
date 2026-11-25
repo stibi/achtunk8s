@@ -31,6 +31,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@achtung/handover-sdk": "workspace:*",
     "@biomejs/biome": "^2.6.6",
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/vitest-runner": "^10.1.1",

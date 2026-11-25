@@ -1,0 +1,36 @@
+{
+  "name": "@achtung/handover-sdk",
+  "version": "0.1.0",
+  "description": "Write a plugin for Achtung: a handler that takes alerts handed over to it",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./conformance": "./conformance/index.ts",
+    "./fake-server": "./src/fake-server.ts"
+  },
+  "bin": {
+    "achtung-handover": "./bin/achtung-handover.ts"
+  },
+  "scripts": {
+    "dev": "node bin/achtung-handover.ts dev",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run deadcode && pnpm run dupes && pnpm run test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "fix": "biome check --write .",
+    "deadcode": "knip",
+    "dupes": "jscpd src conformance bin",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.6",
+    "@types/node": "^24.19.2",
+    "jscpd": "^5.4.3",
+    "knip": "^6.45.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.12"
+  }
+}
