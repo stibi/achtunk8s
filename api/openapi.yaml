@@ -1,7 +1,8 @@
 openapi: 3.0.3
 info:
   title: Achtung
-  description: "Self-hosted alert inbox. No authentication: see ADR 0002."
+  description: Self-hosted alert inbox. No authentication (ADR 0002), except that
+    the handler API can require a token (ADR 0023).
   version: 0.1.0
 components:
   schemas:
@@ -206,34 +207,6 @@ components:
         - cause
         - recordedAt
         - remindAt
-    OccurrenceDetail:
-      type: object
-      properties:
-        occurrence:
-          $ref: "#/components/schemas/Occurrence"
-        events:
-          type: array
-          items:
-            $ref: "#/components/schemas/Event"
-          description: Oldest first
-        otherOccurrences:
-          type: array
-          items:
-            $ref: "#/components/schemas/Occurrence"
-          description: Other occurrences of the same alert, newest first, at most 20
-        metricPanels:
-          description: "The graphs GET /api/occurrences/{id}/metrics/{panel} has for it,
-            e.g. pod-cpu (ADR 0026): none when its instance has no metrics
-            backend or the alert names nothing a panel shows. A string, not an
-            enum, so a client skips the panels it doesn't know. Always sent;
-            absent from servers before graphs"
-          type: array
-          items:
-            type: string
-      required:
-        - occurrence
-        - events
-        - otherOccurrences
     ChannelList:
       type: object
       properties:
@@ -256,6 +229,171 @@ components:
           type: string
       required:
         - occurrences
+        - nextCursor
+    Handover:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+        occurrenceId:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+        handler:
+          type: string
+          description: The id of the handler it was handed to
+        handlerName:
+          type: string
+          description: The handler's name when it was asked
+        handlerVersion:
+          type: string
+        action:
+          type: string
+          description: The id of the handler's action
+        title:
+          type: string
+          description: The action's title when it was asked
+        state:
+          type: string
+          enum:
+            - requested
+            - running
+            - succeeded
+            - failed
+            - cancelled
+            - timed_out
+            - expired
+          description: "requested: waiting for its handler. running: a handler took it.
+            succeeded, failed: the handler's result; failed also when the
+            handler stopped answering. cancelled: by a client. timed_out: it ran
+            past its deadline. expired: no handler took it within 10 minutes"
+        requestedAt:
+          type: string
+          format: date-time
+        claimedAt:
+          nullable: true
+          description: When a handler took it; null when none did
+          type: string
+          format: date-time
+        deadlineAt:
+          nullable: true
+          description: "While running: when it times out. Null otherwise"
+          type: string
+          format: date-time
+        finishedAt:
+          nullable: true
+          description: Set exactly when it is neither requested nor running
+          type: string
+          format: date-time
+        summary:
+          nullable: true
+          description: "Succeeded: the result in one line of plain text"
+          type: string
+        body:
+          nullable: true
+          description: "Succeeded: the result as Markdown. Text from another program:
+            render it as text, load nothing remote from it"
+          type: string
+        links:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              url:
+                type: string
+                description: An http or https URL
+            required:
+              - title
+              - url
+          description: "Succeeded: what the result points to; empty otherwise"
+        error:
+          nullable: true
+          description: "Failed: why"
+          type: string
+        progress:
+          type: array
+          items:
+            type: object
+            properties:
+              at:
+                type: string
+                format: date-time
+              message:
+                type: string
+            required:
+              - at
+              - message
+          description: What the handler reported while working, oldest first
+      required:
+        - id
+        - occurrenceId
+        - handler
+        - handlerName
+        - handlerVersion
+        - action
+        - title
+        - state
+        - requestedAt
+        - claimedAt
+        - deadlineAt
+        - finishedAt
+        - summary
+        - body
+        - links
+        - error
+        - progress
+    ActionOffer:
+      type: object
+      properties:
+        handler:
+          type: string
+          description: The id of the handler offering it
+        handlerName:
+          type: string
+        action:
+          type: string
+          description: The action's id, unique within its handler
+        title:
+          type: string
+          description: What the button says
+        description:
+          type: string
+          description: The button's help text
+        available:
+          type: boolean
+          description: Whether the handler is connected; a handover for one that isn't is
+            refused
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: The handler's last call
+      required:
+        - handler
+        - handlerName
+        - action
+        - title
+        - description
+        - available
+        - lastSeenAt
+    HandoverPage:
+      type: object
+      properties:
+        handovers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Handover"
+        nextCursor:
+          nullable: true
+          description: Pass as cursor for the next page; null on the last
+          type: string
+      required:
+        - handovers
         - nextCursor
     IrmHeartbeat:
       type: object
@@ -743,6 +881,44 @@ components:
       required:
         - alerts
       description: One entry per fingerprint asked for, in that order
+    OccurrenceDetail:
+      type: object
+      properties:
+        occurrence:
+          $ref: "#/components/schemas/Occurrence"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+          description: Oldest first
+        otherOccurrences:
+          type: array
+          items:
+            $ref: "#/components/schemas/Occurrence"
+          description: Other occurrences of the same alert, newest first, at most 20
+        metricPanels:
+          description: "The graphs GET /api/occurrences/{id}/metrics/{panel} has for it,
+            e.g. pod-cpu (ADR 0026): none when its instance has no metrics
+            backend or the alert names nothing a panel shows. A string, not an
+            enum, so a client skips the panels it doesn't know. Always sent;
+            absent from servers before graphs"
+          type: array
+          items:
+            type: string
+        actions:
+          description: What handlers offer to do with this alert, each a button (ADR 0022)
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionOffer"
+        handovers:
+          description: This occurrence's handovers, newest first, at most 20
+          type: array
+          items:
+            $ref: "#/components/schemas/Handover"
+      required:
+        - occurrence
+        - events
+        - otherOccurrences
     ChangeEvent:
       type: object
       properties:
@@ -752,9 +928,135 @@ components:
             - occurrences
             - silences
             - settings
+            - handovers
       required:
         - kind
       description: What changed
+    AlertHandler:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        actions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+                description: Unique within the handler
+              title:
+                type: string
+                minLength: 1
+                maxLength: 40
+                description: What the button says
+              description:
+                type: string
+                maxLength: 200
+                description: The button's help text
+              timeoutSeconds:
+                type: integer
+                minimum: 60
+                maximum: 3600
+                description: How long one handover may run before it times out
+              appliesTo:
+                type: object
+                properties:
+                  instances:
+                    type: array
+                    items:
+                      type: string
+                    description: "Empty: every instance"
+                  severities:
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                        - critical
+                        - warning
+                        - info
+                        - unknown
+                    description: "Empty: every severity"
+                  labels:
+                    type: object
+                    additionalProperties:
+                      type: string
+                required:
+                  - instances
+                  - severities
+                  - labels
+            required:
+              - id
+              - title
+              - description
+              - timeoutSeconds
+              - appliesTo
+      required:
+        - id
+        - name
+        - version
+        - actions
+      description: The handler as registered, with defaults filled in
+    ClaimedHandover:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+          description: The handover
+        action:
+          type: string
+          description: Which of the handler's actions was asked for
+        claimToken:
+          type: string
+          description: Send it as the Achtung-Claim header with every later call for this
+            handover
+        leaseSeconds:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+          description: Call progress at least this often, or the handover fails as handler
+            lost
+        deadlineAt:
+          type: string
+          format: date-time
+          description: When the handover times out
+        requestedAt:
+          type: string
+          format: date-time
+        occurrence:
+          $ref: "#/components/schemas/Occurrence"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+          description: Oldest first
+        otherOccurrences:
+          type: array
+          items:
+            $ref: "#/components/schemas/Occurrence"
+          description: Other occurrences of the same alert, newest first, at most 20
+      required:
+        - id
+        - action
+        - claimToken
+        - leaseSeconds
+        - deadlineAt
+        - requestedAt
+        - occurrence
+        - events
+        - otherOccurrences
+      description: A handover, now this handler's to run, with the occurrence as GET
+        /api/occurrences/{id} returns it. Alert labels and annotations are
+        untrusted text written by other systems
     IngestSummary:
       type: object
       properties:
@@ -863,10 +1165,11 @@ paths:
         - `ready`: sent once the stream is open. Re-read everything: changes
         made while the client wasn't connected were not sent.
 
-        - `changed`: data `{"kind": "occurrences" | "silences" | "settings"}`.
-        Re-read that part: occurrences (a notification arrived, or one resolved
-        as vanished), silences set or ended through Achtung, or the shared
-        settings.
+        - `changed`: data `{"kind": "occurrences" | "silences" | "settings" |
+        "handovers"}`. Re-read that part: occurrences (a notification arrived,
+        or one resolved as vanished), silences set or ended through Achtung, the
+        shared settings, or handovers and the actions offered for alerts (ADR
+        0022).
 
 
         A comment line keeps the stream open every so often. Silences changed in
@@ -1630,6 +1933,658 @@ paths:
               schema:
                 $ref: "#/components/schemas/IgnoredAlertNames"
         "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/occurrences/{id}/handovers:
+    post:
+      operationId: createHandover
+      summary: Hand the occurrence over to a handler's action
+      tags:
+        - client
+      description: "Asks the handler to act on this alert, e.g. to investigate it. The
+        handler takes it when it next asks for work. While a handover of that
+        action is requested or running for the occurrence, that one is returned
+        (200) and nothing new is made. One no handler takes within 10 minutes
+        expires. 404: no such occurrence. 409: no handler offers the action, it
+        isn't for this alert, or its handler isn't connected. 503: 20 handovers
+        are requested or running already."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                handler:
+                  type: string
+                  pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+                  description: The handler offering the action
+                action:
+                  type: string
+                  pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+                  description: The action, as the occurrence's detail lists it
+              required:
+                - handler
+                - action
+      parameters:
+        - schema:
+            type: integer
+            minimum: 0
+            exclusiveMinimum: true
+            maximum: 9007199254740991
+          in: path
+          name: id
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Handover"
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Handover"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/handovers:
+    get:
+      operationId: listHandovers
+      summary: Every handover, newest first
+      tags:
+        - client
+      description: The record of what was handed over and what came back. Nothing is
+        deleted.
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - requested
+              - running
+              - succeeded
+              - failed
+              - cancelled
+              - timed_out
+              - expired
+          in: query
+          name: state
+          required: false
+        - schema:
+            type: string
+          in: query
+          name: cursor
+          required: false
+          description: nextCursor from the previous page
+        - schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+          in: query
+          name: limit
+          required: false
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandoverPage"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/handovers/{id}:
+    get:
+      operationId: getHandover
+      summary: One handover
+      tags:
+        - client
+      parameters:
+        - schema:
+            type: integer
+            minimum: 0
+            exclusiveMinimum: true
+            maximum: 9007199254740991
+          in: path
+          name: id
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Handover"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/handovers/{id}/cancel:
+    post:
+      operationId: cancelHandover
+      summary: Cancel a handover that is requested or running
+      tags:
+        - client
+      description: "It is cancelled at once. A handler working on it learns so from
+        its next progress call and stops. 409: it has ended already."
+      parameters:
+        - schema:
+            type: integer
+            minimum: 0
+            exclusiveMinimum: true
+            maximum: 9007199254740991
+          in: path
+          name: id
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Handover"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/handler/v0/handlers/{handler}:
+    put:
+      operationId: registerHandler
+      summary: Register a handler and the actions it offers
+      tags:
+        - handler
+      description: "Call it at startup, again when the actions change, and after a
+        claim answered 404. It replaces the handler's earlier registration. Each
+        action becomes a button on the alerts it applies to, enabled while the
+        handler keeps calling. 409: 50 handlers are registered already. With
+        handler tokens configured: 401 without a valid bearer token, 403 when it
+        is another handler's."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 60
+                  description: Shown in the client
+                version:
+                  type: string
+                  minLength: 1
+                  maxLength: 40
+                  description: The handler's own version
+                actions:
+                  minItems: 1
+                  maxItems: 10
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+                        description: Unique within the handler
+                      title:
+                        type: string
+                        minLength: 1
+                        maxLength: 40
+                        description: What the button says
+                      description:
+                        default: ""
+                        type: string
+                        maxLength: 200
+                        description: The button's help text
+                      timeoutSeconds:
+                        default: 900
+                        type: integer
+                        minimum: 60
+                        maximum: 3600
+                        description: How long one handover may run before it times out
+                      appliesTo:
+                        default: {}
+                        type: object
+                        properties:
+                          instances:
+                            minItems: 1
+                            maxItems: 50
+                            type: array
+                            items:
+                              type: string
+                              minLength: 1
+                          severities:
+                            minItems: 1
+                            type: array
+                            items:
+                              type: string
+                              enum:
+                                - critical
+                                - warning
+                                - info
+                                - unknown
+                          labels:
+                            description: Each label must be there with exactly this value
+                            type: object
+                            additionalProperties:
+                              type: string
+                        description: "Which alerts the action is for. Every part given must match; none
+                          given: every alert"
+                    required:
+                      - id
+                      - title
+              required:
+                - name
+                - version
+                - actions
+      parameters:
+        - schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          in: path
+          name: handler
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertHandler"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: removeHandler
+      summary: Forget a handler
+      tags:
+        - handler
+      description: "Its actions are no longer offered. Its handovers stay. Removing an
+        unknown handler is not an error. With handler tokens configured: 401
+        without a valid bearer token, 403 when it is another handler's."
+      parameters:
+        - schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          in: path
+          name: handler
+          required: true
+      responses:
+        "204":
+          description: Forgotten
+          content:
+            application/json:
+              schema:
+                type: string
+                nullable: true
+                enum:
+                  - null
+                description: Forgotten
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/handler/v0/handlers/{handler}/claim:
+    post:
+      operationId: claimHandover
+      summary: Take the handler's next handover, waiting for one if asked
+      tags:
+        - handler
+      description: "Answers at once with the oldest handover requested of this
+        handler, which is then running and this handler's alone: it is given out
+        at most once and never again. With none waiting, the request is held for
+        up to `wait` seconds and answered as soon as one arrives, else with 204.
+        Every call counts as the handler being connected. Keep calling in a
+        loop. 404: the handler isn't registered; register, then claim again.
+        503: too many claims are waiting; try again after a pause. With handler
+        tokens configured: 401 without a valid bearer token, 403 when it is
+        another handler's."
+      parameters:
+        - schema:
+            default: 10
+            type: integer
+            minimum: 0
+            maximum: 30
+          in: query
+          name: wait
+          required: false
+          description: Seconds to wait for a handover. Over 10 needs a gateway that
+            doesn't cut requests off at 15 s
+        - schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          in: path
+          name: handler
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimedHandover"
+        "204":
+          description: Nothing to do
+          content:
+            application/json:
+              schema:
+                type: string
+                nullable: true
+                enum:
+                  - null
+                description: Nothing to do
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/handler/v0/handovers/{id}/progress:
+    post:
+      operationId: reportHandoverProgress
+      summary: Keep a claimed handover alive, with a status line if there is one
+      tags:
+        - handler
+      description: "Renews the handover's lease, and records the message for the
+        client to show. Up to 200 messages are kept; later ones only renew the
+        lease. The answer says where the handover is: anything but running means
+        stop working on it, e.g. cancelled by a client. Send the claim token as
+        the Achtung-Claim header. 403: it is missing or not this handover's."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              nullable: true
+              type: object
+              properties:
+                message:
+                  description: A status line for the client; without one the call only renews the
+                    lease
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+      parameters:
+        - schema:
+            type: integer
+            minimum: 0
+            exclusiveMinimum: true
+            maximum: 9007199254740991
+          in: path
+          name: id
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    type: string
+                    enum:
+                      - requested
+                      - running
+                      - succeeded
+                      - failed
+                      - cancelled
+                      - timed_out
+                      - expired
+                  leaseSeconds:
+                    type: integer
+                    minimum: 0
+                    exclusiveMinimum: true
+                    maximum: 9007199254740991
+                    description: Call again within this long
+                required:
+                  - state
+                  - leaseSeconds
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/handler/v0/handovers/{id}/result:
+    post:
+      operationId: answerHandover
+      summary: End a claimed handover with its result
+      tags:
+        - handler
+      description: "succeeded, with a one-line summary, a Markdown body and links, or
+        failed, with the reason. The same result sent again is answered as
+        before. 409: the handover ended another way first (cancelled, timed out,
+        handler lost) or with a different result. Send the claim token as the
+        Achtung-Claim header. 403: it is missing or not this handover's."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    outcome:
+                      type: string
+                      enum:
+                        - succeeded
+                    summary:
+                      type: string
+                      minLength: 1
+                      maxLength: 300
+                      pattern: ^[^\r\n]*$
+                      description: One line of plain text
+                    body:
+                      type: string
+                      maxLength: 65536
+                      description: Markdown; rendered as text
+                    links:
+                      maxItems: 10
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          title:
+                            type: string
+                            minLength: 1
+                            maxLength: 100
+                          url:
+                            type: string
+                            maxLength: 2000
+                        required:
+                          - title
+                          - url
+                  required:
+                    - outcome
+                    - summary
+                    - body
+                - type: object
+                  properties:
+                    outcome:
+                      type: string
+                      enum:
+                        - failed
+                    error:
+                      type: string
+                      minLength: 1
+                      maxLength: 2000
+                      description: Why, for the person who asked
+                  required:
+                    - outcome
+                    - error
+      parameters:
+        - schema:
+            type: integer
+            minimum: 0
+            exclusiveMinimum: true
+            maximum: 9007199254740991
+          in: path
+          name: id
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Handover"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
           description: Default Response
           content:
             application/json:

@@ -11,6 +11,7 @@ struct NotificationSettings: View {
     @AppStorage(NotificationSetting.criticalKey) private var critical = true
     @AppStorage(NotificationSetting.warningKey) private var warning = false
     @AppStorage(NotificationSetting.pausedUntilKey) private var pausedUntil = 0.0
+    @AppStorage(NotificationSetting.handoversKey) private var handovers = true
     @State private var status: UNAuthorizationStatus?
 
     var body: some View {
@@ -27,6 +28,11 @@ struct NotificationSettings: View {
                 .disabled(!enabled)
             Toggle("Warning", isOn: $warning)
                 .disabled(!enabled)
+            Toggle("Notify when a handover I asked for ends", isOn: $handovers)
+                .disabled(!enabled)
+                .help(
+                    "When a plugin finishes, or fails, what you handed an alert over for. "
+                        + "Only on the Mac that asked.")
             if Date(timeIntervalSinceReferenceDate: pausedUntil) > .now {
                 HStack {
                     Text(

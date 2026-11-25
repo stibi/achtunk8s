@@ -1,0 +1,62 @@
+# An example: the model handler next to Achtung in Kubernetes. It connects out to Achtung
+# and to the model's API, so it has no Service. Adjust the image, the addresses and the
+# model, and create the Secret yourself:
+#   kubectl create secret generic achtung-llm-analysis \
+#     --from-literal=handler-token=… --from-literal=llm-api-key=…
+# The handler's token must also be in the server's HANDLER_TOKENS, under "llm-analysis".
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: achtung-llm-analysis
+  labels:
+    app.kubernetes.io/name: achtung-llm-analysis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: achtung-llm-analysis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: achtung-llm-analysis
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: handler
+          image: registry.example.com/achtung-llm-analysis:0.1.0
+          env:
+            - name: ACHTUNG_URL
+              value: http://achtung.achtung.svc:8080
+            - name: ACHTUNG_HANDLER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: achtung-llm-analysis
+                  key: handler-token
+            - name: LLM_BASE_URL
+              value: https://api.x.ai/v1
+            - name: LLM_MODEL
+              value: example-model
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: achtung-llm-analysis
+                  key: llm-api-key
+            # Names never sent to the model, e.g. the ones that carry hostnames.
+            - name: DROP_LABELS
+              value: instance,node
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

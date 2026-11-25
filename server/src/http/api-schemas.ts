@@ -86,24 +86,14 @@ const eventBody = z
   })
   .meta({ id: "Event" });
 
-export const occurrenceDetailBody = z
-  .object({
-    occurrence: occurrenceBody,
-    events: z.array(eventBody).describe("Oldest first"),
-    otherOccurrences: z
-      .array(occurrenceBody)
-      .describe("Other occurrences of the same alert, newest first, at most 20"),
-    metricPanels: z
-      .array(z.string())
-      .optional()
-      .describe(
-        "The graphs GET /api/occurrences/{id}/metrics/{panel} has for it, e.g. pod-cpu (ADR 0026): " +
-          "none when its instance has no metrics backend or the alert names nothing a panel shows. " +
-          "A string, not an enum, so a client skips the panels it doesn't know. Always sent; " +
-          "absent from servers before graphs",
-      ),
-  })
-  .meta({ id: "OccurrenceDetail" });
+/** The occurrence itself: also exactly what a handler is handed (ADR 0022). */
+export const occurrenceDetailFields = {
+  occurrence: occurrenceBody,
+  events: z.array(eventBody).describe("Oldest first"),
+  otherOccurrences: z
+    .array(occurrenceBody)
+    .describe("Other occurrences of the same alert, newest first, at most 20"),
+};
 
 export const channelListBody = z
   .object({ channels: z.array(channelBody) })
@@ -145,13 +135,10 @@ function toEventBody(event: OccurrenceEvent): z.infer<typeof eventBody> {
   };
 }
 
-export function toOccurrenceDetailBody(
-  detail: OccurrenceDetail,
-): z.infer<typeof occurrenceDetailBody> {
+export function toOccurrenceDetailFields(detail: OccurrenceDetail) {
   return {
     occurrence: toOccurrenceBody(detail.occurrence),
     events: detail.events.map(toEventBody),
     otherOccurrences: detail.otherOccurrences.map(toOccurrenceBody),
-    metricPanels: [...detail.metricPanels],
   };
 }

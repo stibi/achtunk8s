@@ -150,14 +150,21 @@ public struct OccurrenceDetail: Sendable, Hashable {
     public let otherOccurrences: [Occurrence]
     /// The graphs the server has for it (ADR 0026); none from a server before graphs.
     public let metricPanels: [MetricPanel]
+    /// What handlers offer to do with this alert (ADR 0022); none from a server before
+    /// handovers, or with no handler registered.
+    public let actions: [ActionOffer]
+    /// This occurrence's handovers, newest first.
+    public let handovers: [Handover]
 
     public init(
         occurrence: Occurrence, events: [OccurrenceEvent], otherOccurrences: [Occurrence],
-        metricPanels: [MetricPanel] = []
+        metricPanels: [MetricPanel] = [], actions: [ActionOffer] = [], handovers: [Handover] = []
     ) {
         self.occurrence = occurrence
         self.events = events
         self.otherOccurrences = otherOccurrences
         self.metricPanels = metricPanels
+        self.actions = actions
+        self.handovers = handovers
     }
 }

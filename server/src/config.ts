@@ -73,6 +73,16 @@ const metricsSchema = z
     message: "put credentials in username and password, not in the URL",
   });
 
+// Each handler's token, by handler id (ADR 0023).
+const handlerTokensSchema = z
+  .record(
+    z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/, "a handler id"),
+    z.string().min(16, "a token of at least 16 characters"),
+  )
+  .refine((tokens) => new Set(Object.values(tokens)).size === Object.keys(tokens).length, {
+    message: "each handler needs its own token",
+  });
+
 /** JSON text in an environment variable, validated by `schema`. */
 function json<T extends z.ZodType>(schema: T) {
   return z
@@ -110,6 +120,9 @@ const envSchema = z
       .refine(withoutCredentialsIfURL, { message: "no credentials in the URL; use IRM_API_TOKEN" })
       .optional(),
     IRM_API_TOKEN: z.string().min(1).optional(),
+    // {"<handler>": "<token>"}: the plugins that may use the handler API, each with its
+    // bearer token (ADR 0023). Secrets. Unset: the handler API is open like the rest.
+    HANDLER_TOKENS: json(handlerTokensSchema).optional(),
   })
   .refine((env) => (env.IRM_API_URL === undefined) === (env.IRM_API_TOKEN === undefined), {
     message: "IRM_API_URL and IRM_API_TOKEN go together",
@@ -148,6 +161,8 @@ export interface Config {
   readonly irm: { readonly url: string; readonly token: string } | null;
   /** By instance name. An instance without one has no graphs. */
   readonly metrics: ReadonlyMap<string, MetricsConfig>;
+  /** Each handler's token, by handler id (ADR 0023); null: the handler API needs none. */
+  readonly handlerTokens: ReadonlyMap<string, string> | null;
 }
 
 export function loadConfig(
@@ -182,6 +197,10 @@ export function loadConfig(
         metricsConfigOf(entry),
       ]),
     ),
+    handlerTokens:
+      result.data.HANDLER_TOKENS === undefined
+        ? null
+        : new Map(Object.entries(result.data.HANDLER_TOKENS)),
   };
 }
 

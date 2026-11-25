@@ -16,6 +16,7 @@ Alertmanager ──POST /ingest/alertmanager/{instance}/{channel}──▶ http 
                                                        db (Postgres)
                                                         │
 macOS client ◀──── REST API + Server-Sent Events ───── http
+handlers (plugins) ──register, claim, progress, result (/api/handler/v0)──▶ http
 
 services ──▶ clients ──GET silences, GET alerts (each ≤ 1 per 30 s per instance, fresh for a change)──▶ Alertmanager API
                      ──POST/DELETE silence (the silence button)───────────────────▶
@@ -126,8 +127,9 @@ The identity below is a contract that features build on
 - Tables (`src/db/schema.ts`): `channels` (with the `receiver` that last delivered to
   it, written only when it changes, so ingest doesn't lock the row), `occurrences` (one
   row per occurrence, with the latest fields reported for it), `events` (append-only
-  history), `ignored_alert_names` (a setting, ADR 0011) and `reminders` (the reminder
-  pending on an occurrence, at most one, ADR 0025). Raw payloads
+  history), `ignored_alert_names` (a setting, ADR 0011), `reminders` (the reminder
+  pending on an occurrence, at most one, ADR 0025), and for handovers (below)
+  `alert_handlers`, `handovers` and `handover_progress`. Raw payloads
   are not stored. `events.id` is not a safe stream cursor: ids are assigned at insert,
   so a lower id can commit after a higher one. The change stream needs none: it replays
   nothing, and a client re-reads everything when it connects (ADR 0019).
@@ -254,8 +256,8 @@ The identity below is a contract that features build on
   can't be read (and logs a warning), and `domain/silence.ts` evaluates the matchers.
   The home view's alerts are read the same way, and a failed read is logged the same way.
 - `GET /api/events` (`src/http/events.ts`) is a Server-Sent Events stream of what changed
-  (ADR 0019): `ready` on connect, then `changed` with `occurrences`, `silences` or
-  `settings`. It carries no data; clients re-read through the routes above. The services
+  (ADR 0019): `ready` on connect, then `changed` with `occurrences`, `silences`,
+  `settings` or `handovers`. It carries no data; clients re-read through the routes above. The services
   publish each change to `services/changes.ts` (`servicesFor` wraps the changing use
   cases; the reconciler publishes what it resolved), in memory, so one replica only.
 - Errors are `{ "error": "…" }`: 400 for invalid input (including a cursor the server
@@ -274,6 +276,89 @@ The identity below is a contract that features build on
   is committed; `check` fails when it is out of date, and `pnpm run api:generate`
   rewrites it. Its diff is the API change to review.
 
+## Handovers to plugins
+
+An alert can be handed over to a plugin, e.g. to have an agent investigate it
+([ADR 0022](adr/0022-handover-to-handlers.md)). The protocol, for plugin authors, is in
+[`handover-protocol.md`](handover-protocol.md); the plan and what is built so far in
+[`plans/agent-handover-plugins.md`](plans/agent-handover-plugins.md).
+
+- A plugin is an **alert handler**: a separate program that calls the server. It
+  registers the **actions** it offers; a **handover** is one occurrence given to one
+  action. Nothing of a plugin runs in the server, and the server never calls one.
+- **The handler API**, `/api/handler/v0/…` (`src/http/handler-api.ts`,
+  `handler-handovers.ts`; tag `handler` in `api/openapi.yaml`, which the Swift client
+  doesn't generate): `PUT` and `DELETE handlers/{handler}`, `POST
+  handlers/{handler}/claim?wait=`, `POST handovers/{id}/progress` and `/result`. It is
+  public and versioned in its path; `v0` may change.
+- **Client routes** (`src/http/handovers.ts`): `POST /api/occurrences/{id}/handovers`
+  with `{ handler, action }` (201, or 200 with the one already requested or running),
+  `GET /api/handovers?state=&cursor=&limit=` (newest first), `GET /api/handovers/{id}`,
+  `POST /api/handovers/{id}/cancel`. `GET /api/occurrences/{id}` also carries `actions`
+  (those whose `appliesTo` matches, with `available`: the handler called within 90
+  seconds or holds a running handover) and the occurrence's `handovers`, newest first, at most 20. Both are
+  optional in the spec until the macOS client reads them.
+- **States** (`domain/handover.ts`, a union by state): `requested` → `running` →
+  `succeeded` or `failed`; `cancelled` from either; `timed_out` at the action's
+  deadline; `failed` ("handler lost") when the two-minute lease ran out; `expired` when
+  nobody claimed it for 10 minutes. `overdue` decides what the clock alone ends.
+- **Every change runs alone and settles the clock first** (`services/handover-changes.ts`):
+  one transaction under an advisory lock, which first ends the handovers that are
+  overdue at that moment, then does its step. So leases, deadlines, "one active
+  handover per occurrence and action" and the limits (20 active, 50 handlers, 200
+  progress lines) need no further locking, and are exact whoever asks first. Reads
+  settle too. `main.ts` runs a sweep every minute, which records endings nobody asked
+  about and forgets handlers not seen for 30 days. Each change publishes `handovers` on
+  the change stream.
+- **A claim is at most once.** `claimNextHandover` reads the occurrence's detail (which
+  may ask Alertmanager for silences) outside the lock, then claims only if the handover
+  is still requested. The claim stores that detail as the handover's `snapshot`, the
+  record of what was handed over, and a claim token that the handler's later calls must
+  send (`Achtung-Claim`); no read returns it. Nothing is retried automatically.
+- **The claim's long poll** (`src/http/claim-wait.ts`) tries again after each
+  `handovers` change until `wait` is over. It holds at most 100 requests (503 beyond),
+  checks that the connection is still open before every attempt, and ends every wait
+  when the server closes, answering with `connection: close`.
+- **Handler tokens** ([ADR 0023](adr/0023-handler-token.md), `src/http/handler-auth.ts`):
+  with `HANDLER_TOKENS` set, a hook on the handler routes requires the handler's bearer
+  token, compared in constant time; a handler acts only under its own id. The client
+  routes stay open (ADR 0002).
+- **The SDK** (`sdk/typescript/`, a workspace package of its own with its own `check`):
+  `runHandler` (register, claim, renew, answer), `agentReport` (the alert as Markdown,
+  the same text as the client's Copy for Agent), a fake server for plugin authors
+  (`pnpm --dir sdk/typescript run dev`) and the protocol as conformance scenarios. The
+  server's tests run those scenarios against the real server
+  (`test/http/handover-conformance.test.ts`), and the SDK's run them against the fake, so
+  the two can't drift apart unnoticed. The SDK's types are written by hand from the spec.
+- **The macOS client** shows them in the detail pane only (`HandoverSection`, under the
+  alert's buttons): a button per action the detail lists, off with the reason when its
+  handler isn't connected or is working on this alert already; a `HandoverCard` for the
+  newest handover of each action (`OccurrenceDetail.latestHandovers`), with a spinner, the
+  handler's progress lines and Cancel while it is requested or running, and the result
+  once it ended; the earlier ones folded under "Earlier handovers".
+  `Handover.State` in AchtungDomain is an enum with exactly the facts each state has;
+  `HandoverMapping.swift` rejects a combination the states don't allow, and a link that
+  isn't http or https. `handoverText` renders the body: inline Markdown only, an image as
+  its alt text, a link kept only when it is http or https, with its target spelled out
+  when its text doesn't say. The detail is read again on `changed: handovers`
+  (`InboxModel.handoversChanged`), and with each refresh while a handover on screen or one
+  of this Mac's is still active, so it also works without the stream.
+  `HandoverWatch` remembers, in memory, the handovers this Mac asked for; when one ends,
+  this Mac gets a notification ("… finished: …", Settings › Notifications), and no other
+  Mac does. Demo mode has two made-up plugins (`demo-server.py`).
+- **Handlers in this repository** (`handlers/`, workspace packages written with the SDK,
+  checked together: `pnpm --recursive --filter './handlers/*' run check`).
+  `handlers/llm-analysis` asks a language model what an alert means, over the
+  OpenAI-compatible chat API, hosted or local: fixed instructions, the alert fenced as
+  data, named labels and annotations left out, no tools. It has its own `Dockerfile`.
+  `handlers/herdr-agent` starts a coding agent in a herdr workspace per handover: it
+  writes the alert to a file, gives the agent fixed instructions naming that file and a
+  result file, follows the agent through herdr's CLI (`src/herdr.ts`, argument vectors
+  only), says in the alert when the agent waits for a person, and posts the result file.
+  What the agent may touch is the operator's to bound; its README says how.
+- A result is untrusted text from another program. Links must be `http` or `https`
+  (checked on the way in); clients render the body as text and load nothing from it.
+
 ## Runtime
 
 - Node.js runs the TypeScript sources directly using type stripping. There is no build
@@ -283,7 +368,8 @@ The identity below is a contract that features build on
 - Deployed as one container image (`Dockerfile`). It applies migrations on startup and
   writes nothing to disk, so it runs with a read-only root filesystem.
 - Configuration comes from the environment (`src/config.ts`): `DATABASE_URL` (required),
-  `HOST`, `PORT`, `LOG_LEVEL`, `ALERTMANAGERS`, `IRM_API_URL`, `IRM_API_TOKEN`, `METRICS`. The
+  `HOST`, `PORT`, `LOG_LEVEL`, `ALERTMANAGERS`, `IRM_API_URL`, `IRM_API_TOKEN`, `METRICS`,
+  `HANDLER_TOKENS`. The
   standard libpq variables (`PGPASSWORD`, …) fill in what `DATABASE_URL` leaves out, so a
   password never needs URL-encoding.
 - `ALERTMANAGERS` is a JSON object of instance name → `{ "url": "…", "username": "…",
@@ -297,6 +383,10 @@ The identity below is a contract that features build on
   bearer token, not both; `headers` (not `Authorization`) e.g. for Mimir's tenant;
   `matchers`, label name → value, added to every query. It holds credentials, so set it
   from a secret. An instance without an entry has no graphs.
+- `HANDLER_TOKENS` is a JSON object of handler id → token (at least 16 characters),
+  the plugins that may use the handler API (ADR 0023). Secrets, so set it from a secret.
+  Without it the handler API is open like the rest, and a registering handler is logged
+  as a warning.
 - `IRM_API_URL` (e.g. `https://oncall-prod-eu-west-0.grafana.net/oncall`, no credentials
   in it) and `IRM_API_TOKEN` (sent raw as `Authorization`) go together or not at all.
   The token is a secret. Without them, no tile has an IRM heartbeat.

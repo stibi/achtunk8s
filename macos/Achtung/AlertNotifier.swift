@@ -90,6 +90,26 @@ final class AlertNotifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// That a handover this Mac asked for ended (ADR 0022), with how. Clicking it opens the
+    /// alert. Apart from the alert's own notification, which it mustn't replace.
+    func post(ended handover: Handover, alertTitle: String, server: URL) {
+        let content = UNMutableNotificationContent()
+        switch handover.state {
+        case .succeeded: content.title = "\(handover.title) finished: \(alertTitle)"
+        default: content.title = "\(handover.title) didn't finish: \(alertTitle)"
+        }
+        content.subtitle = handover.handlerName
+        content.body = handover.statusLine
+        content.sound = .default
+        content.userInfo = [
+            "occurrences": [handover.occurrenceID], "server": server.absoluteString,
+        ]
+        add(
+            UNNotificationRequest(
+                identifier: "\(server.absoluteString)#handover-\(handover.id)", content: content,
+                trigger: nil))
+    }
+
     /// A short note that something done from a notification didn't work.
     func postProblem(title: String, body: String) {
         let content = UNMutableNotificationContent()

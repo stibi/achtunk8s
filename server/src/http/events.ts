@@ -22,7 +22,7 @@ const maxBufferedBytes = 64 * 1024;
 const retryMs = 5000;
 
 const changedData = z
-  .object({ kind: z.enum(["occurrences", "silences", "settings"]) })
+  .object({ kind: z.enum(["occurrences", "silences", "settings", "handovers"]) })
   .describe("What changed")
   .meta({ id: "ChangeEvent" });
 
@@ -30,7 +30,7 @@ const description = [
   "A `text/event-stream` (Server-Sent Events) that stays open. Events:",
   "",
   "- `ready`: sent once the stream is open. Re-read everything: changes made while the client wasn't connected were not sent.",
-  '- `changed`: data `{"kind": "occurrences" | "silences" | "settings"}`. Re-read that part: occurrences (a notification arrived, or one resolved as vanished), silences set or ended through Achtung, or the shared settings.',
+  '- `changed`: data `{"kind": "occurrences" | "silences" | "settings" | "handovers"}`. Re-read that part: occurrences (a notification arrived, or one resolved as vanished), silences set or ended through Achtung, the shared settings, or handovers and the actions offered for alerts (ADR 0022).',
   "",
   "A comment line keeps the stream open every so often. Silences changed in Alertmanager itself are not announced, so clients still poll, slower, as long as the stream is open. 503: too many streams are open.",
 ].join("\n");

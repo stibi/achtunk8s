@@ -1,0 +1,24 @@
+{
+  "id": 3,
+  "occurrenceId": 9,
+  "handler": "herdr-agent",
+  "handlerName": "herdr agent",
+  "handlerVersion": "0.1.0",
+  "action": "investigate",
+  "title": "Investigate with Agent",
+  "state": "succeeded",
+  "requestedAt": "2026-11-15T09:00:00.000Z",
+  "claimedAt": "2026-11-15T09:00:03.000Z",
+  "deadlineAt": null,
+  "finishedAt": "2026-11-15T09:07:00.000Z",
+  "summary": "The api container is out of memory",
+  "body": "## Findings\n\nOOM-killed four times.",
+  "links": [
+    {
+      "title": "Open",
+      "url": "javascript:alert(1)"
+    }
+  ],
+  "error": null,
+  "progress": []
+}

@@ -130,7 +130,10 @@ extension Components.Schemas.OccurrenceDetail {
             events: events.map(\.domain),
             otherOccurrences: try otherOccurrences.map { try $0.domain() },
             // Panels this client doesn't know yet are left out (ADR 0026).
-            metricPanels: (metricPanels ?? []).compactMap(MetricPanel.init(rawValue:)))
+            metricPanels: (metricPanels ?? []).compactMap(MetricPanel.init(rawValue:)),
+            // Absent from a server before handovers (ADR 0022).
+            actions: (actions ?? []).map(\.domain),
+            handovers: try (handovers ?? []).map { try $0.domain() })
     }
 }
 

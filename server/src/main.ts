@@ -48,6 +48,7 @@ const app = buildApp({
   sources: [alertmanagerSource],
   services,
   checkReady: () => ping(pool),
+  handlers: { tokens: config.handlerTokens },
 });
 
 /**
@@ -113,12 +114,20 @@ const reminding = repeat(
   "could not remind of occurrences",
 );
 
+// Records the handovers the clock ended and forgets handlers long gone (ADR 0022).
+const sweepEveryMs = 60_000;
+const sweeping = repeat(
+  sweepEveryMs,
+  () => services.handovers.sweep(),
+  "could not sweep handovers",
+);
+
 // An idle connection that breaks must not crash the process; the pool reconnects.
 pool.on("error", (error) => app.log.error({ err: error }, "database connection failed"));
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   app.log.info({ signal }, "shutting down");
-  await Promise.all([reconciling.stop(), reminding.stop()]);
+  await Promise.all([reconciling.stop(), reminding.stop(), sweeping.stop()]);
   await app.close();
   await pool.end();
 }
@@ -132,3 +141,4 @@ await app.listen({ host: config.host, port: config.port });
 reconciling.start(reconcileEveryMs);
 // At once: what came due while the server was down resurfaces now.
 reminding.start(0);
+sweeping.start(sweepEveryMs);

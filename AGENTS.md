@@ -26,6 +26,19 @@ pnpm --dir server run dev           # run the server locally (needs DATABASE_URL
 pnpm --dir server run test:mutation # mutation tests (slow; runs nightly in CI)
 ```
 
+Plugins hand alerts over to programs outside Achtung (ADR 0022). `sdk/typescript/` is the
+SDK for writing one, a handler: read `docs/handover-protocol.md` and its `README.md` first.
+Its conformance scenarios also run against the real server (`server/test/http/handover-conformance.test.ts`),
+so a change to the handler API changes the scenarios and the fake server with it. The SDK's own
+check doesn't run them against the real server: after changing a scenario, run that test.
+
+```bash
+pnpm --dir sdk/typescript run check        # typecheck, lint, dead code, duplication, tests (no Docker)
+pnpm --dir sdk/typescript run fix          # auto-fix formatting and lint
+pnpm --dir sdk/typescript run dev          # a fake Achtung server on :8790, to try a handler against
+pnpm --recursive --filter './handlers/*' run check   # the handlers in handlers/, each a package written with the SDK
+```
+
 The public website (achtunk8s.io) is an Astro static site in `website/`. Pushes to `main`
 that touch it deploy it to Cloudflare (`.github/workflows/website.yml`, after its check). Read
 `website/README.md` before changing it; it is public, so no real hostnames.

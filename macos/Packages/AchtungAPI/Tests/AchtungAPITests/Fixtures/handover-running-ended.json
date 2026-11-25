@@ -1,0 +1,19 @@
+{
+  "id": 9,
+  "occurrenceId": 9,
+  "handler": "herdr-agent",
+  "handlerName": "herdr agent",
+  "handlerVersion": "0.1.0",
+  "action": "investigate",
+  "title": "Investigate with Agent",
+  "state": "running",
+  "requestedAt": "2026-11-15T10:00:00.000Z",
+  "claimedAt": "2026-11-15T10:00:02.000Z",
+  "deadlineAt": "2026-11-15T10:05:00.000Z",
+  "finishedAt": "2026-11-15T10:05:00.000Z",
+  "summary": null,
+  "body": null,
+  "links": [],
+  "error": null,
+  "progress": []
+}

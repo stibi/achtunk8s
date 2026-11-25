@@ -1,6 +1,8 @@
 packages:
   - server
   - website
+  - sdk/typescript
+  - handlers/*
 # Build scripts are opt-in. The denied ones are optional native speedups (ssh2,
 # cpu-features: Docker over SSH in Testcontainers), binary checks (esbuild, used by
 # drizzle-kit and Astro; workerd, used by wrangler) or postinstall notices; everything

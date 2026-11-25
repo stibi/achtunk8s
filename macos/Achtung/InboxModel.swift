@@ -41,6 +41,7 @@ final class InboxModel {
     private var loadingOlder: Set<OccurrenceScope> = []
     /// Internal for the extensions in `InboxModel+Alerts.swift`.
     let server: AchtungServer
+    let handoverWatch = HandoverWatch()
     private let defaults: UserDefaults
     private let readStateKey: String
 
@@ -136,7 +137,7 @@ final class InboxModel {
         }
         do throws(ServerError) {
             let loaded = try await server.occurrence(id: occurrence.id)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, isStillWanted(loaded) else { return }
             detail = loaded
             detailProblem = nil
         } catch {

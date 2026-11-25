@@ -55,7 +55,14 @@ struct AlertDetailView: View {
     private var details: some View {
         AlertDetails(
             occurrence: occurrence, silence: silence, events: detail?.events,
-            hasCopyShortcut: true, graph: podCPUGraph)
+            hasCopyShortcut: true, graph: podCPUGraph, handovers: handovers)
+    }
+
+    /// What plugins offer for this alert and what came of it (ADR 0022), once the detail
+    /// has loaded.
+    private var handovers: HandoverSection? {
+        guard let detail, detail.occurrence.id == occurrence.id else { return nil }
+        return HandoverSection(occurrence: occurrence, detail: detail)
     }
 
     /// Shown once the detail says the server has the graph for this alert: an alert without
@@ -91,6 +98,9 @@ struct AlertDetails<History: View>: View {
     /// The CPU graph of the alert's pod, under the summary and actions; only the detail pane
     /// has it (ADR 0026).
     var graph: PodCPUGraph?
+    /// The actions plugins offer and the handovers, under the buttons; only the detail pane
+    /// has them (ADR 0022).
+    var handovers: HandoverSection?
     @ViewBuilder var history: () -> History
 
     private var alert: IncomingAlert { occurrence.alert }
@@ -118,6 +128,7 @@ struct AlertDetails<History: View>: View {
                     }
                 }
             }
+            handovers
             graph
             history()
             AnnotationsSection(alert: alert)
@@ -137,11 +148,13 @@ struct AlertDetails<History: View>: View {
 extension AlertDetails where History == EmptyView {
     init(
         occurrence: Occurrence, silence: SilenceActions, events: [OccurrenceEvent]? = nil,
-        hasCopyShortcut: Bool = false, collapse: (() -> Void)? = nil, graph: PodCPUGraph? = nil
+        hasCopyShortcut: Bool = false, collapse: (() -> Void)? = nil, graph: PodCPUGraph? = nil,
+        handovers: HandoverSection? = nil
     ) {
         self.init(
             occurrence: occurrence, silence: silence, events: events,
-            hasCopyShortcut: hasCopyShortcut, collapse: collapse, graph: graph
+            hasCopyShortcut: hasCopyShortcut, collapse: collapse, graph: graph,
+            handovers: handovers
         ) {
             EmptyView()
         }

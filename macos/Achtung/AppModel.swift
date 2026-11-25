@@ -46,7 +46,7 @@ final class AppModel {
     /// Opens the main window; set by the menu bar's label, which has SwiftUI's `openWindow`.
     var openMainWindow: () -> Void = {}
 
-    private let notifier = AlertNotifier()
+    let notifier = AlertNotifier()
     private let defaults: UserDefaults
     private var poller: Task<Void, Never>?
     /// The server's change stream (ADR 0019); the poll slows down while it's live.

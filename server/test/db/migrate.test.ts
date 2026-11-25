@@ -30,8 +30,11 @@ describe("migrateDatabase", () => {
       "select table_name as name from information_schema.tables where table_schema = 'public' order by 1",
     );
     expect(tables.rows.map((row) => row.name)).toEqual([
+      "alert_handlers",
       "channels",
       "events",
+      "handover_progress",
+      "handovers",
       "ignored_alert_names",
       "occurrences",
       "reminders",

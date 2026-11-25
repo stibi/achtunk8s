@@ -62,6 +62,15 @@ you silence it where it came from.
 - **Readable alerts:** summary and description as prose, links as buttons, every label
   a hover away from copying. **Copy for Agent** (⇧⌘C) puts the whole alert on the
   clipboard as Markdown for an AI agent.
+- **Hand an alert over to a plugin:** a program of yours, a *handler*, can offer actions
+  on alerts, e.g. "Investigate with Agent". The button hands the alert over; the alert
+  then shows the handler's progress and, when it is done, what it found, for everyone.
+  Handlers are written against a small HTTP protocol
+  ([`docs/handover-protocol.md`](docs/handover-protocol.md)), with an SDK for TypeScript
+  ([`sdk/typescript`](sdk/typescript/README.md)). Two handlers are in this repository:
+  [`handlers/llm-analysis`](handlers/llm-analysis/README.md) asks a language model, hosted
+  or local, what an alert means, and [`handlers/herdr-agent`](handlers/herdr-agent/README.md)
+  has a coding agent investigate it. Neither has run against real alerts yet.
 - **Keeps itself up to date:** the app checks for a new build once a day and installs
   it when you say so.
 - **Keyboard shortcuts** for search, refresh, Mark All as Read, Copy for Agent, Remind
@@ -327,9 +336,10 @@ to that API. [ADR 0026](docs/adr/0026-metrics-of-the-alerted-resource.md) (propo
   alerts when expected heartbeats *stop*: silence otherwise looks like health. The
   inbox would send a deep heartbeat (each Watchdog seen, time of the last ingest) and show
   the switches on Home.
-- **Investigate with an agent** (planned). One button in an alert's detail that hands
-  the alert to a coding agent, which investigates read-only and posts its findings back
-  to the alert. It builds on the change stream and on today's Copy for Agent.
+- **Investigate with an agent** (in progress). The handover and both handlers are built
+  (above). Still to come: the agent handler's first runs on real alerts with read-only
+  credentials, the model handler's with a real and with a local model, and freezing the
+  plugin protocol as `v1` ([plan](docs/plans/agent-handover-plugins.md)).
 - **Acknowledgement** (planned): mark an alert as being worked on, for everyone.
 - **Users and collaboration** (future direction). Sign-in through OIDC, notes on an
   alert, comments on alerts and events in Live, perhaps very light messaging. Today
@@ -360,6 +370,7 @@ docker run -p 8080:8080 \
 | `ALERTMANAGERS` | Optional JSON: instance name → `{ "url", "username", "password", "irmIntegrationId" }`. Enables silences and Home for that instance. Holds credentials, so set it from a secret. |
 | `IRM_API_URL`, `IRM_API_TOKEN` | Optional, together: the Grafana IRM heartbeat on Home tiles. |
 | `METRICS` | Optional JSON: instance name → `{ "url", "username", "password", "bearerToken", "headers", "matchers" }`, a Prometheus-compatible query API. Enables the CPU graph in an alert about a pod. Holds credentials, so set it from a secret. |
+| `HANDLER_TOKENS` | Optional JSON: handler id → token. The plugins that may take alerts handed over to them ([protocol](docs/handover-protocol.md)). Without it, any program that reaches the server may. Set it from a secret. |
 | `HOST`, `PORT`, `LOG_LEVEL` | Defaults `0.0.0.0`, `8080`. |
 
 `/healthz` and `/readyz` are the liveness and readiness probes.
