@@ -3,13 +3,13 @@ import {
   answer,
   applies,
   connectedWithinMs,
+  defaultLeaseMs,
   type Handler,
   invalidResult,
   isActive,
   isMessage,
   iso,
   isRegistration,
-  leaseMs,
   refuse,
   type StoredHandover,
   settle,
@@ -26,10 +26,12 @@ export class FakeHandovers {
   readonly #handovers: StoredHandover[] = [];
   readonly #occurrences: readonly Occurrence[];
   readonly #now: () => Date;
+  readonly #leaseMs: number;
 
-  constructor(occurrences: readonly Occurrence[], now: () => Date) {
+  constructor(occurrences: readonly Occurrence[], now: () => Date, leaseMs = defaultLeaseMs) {
     this.#occurrences = occurrences;
     this.#now = now;
+    this.#leaseMs = leaseMs;
   }
 
   /** The time it is, after ending what the clock ended. */
@@ -193,7 +195,7 @@ export class FakeHandovers {
     Object.assign(handover, {
       state: "running",
       claimedAt: at,
-      leaseExpiresAt: new Date(at.getTime() + leaseMs),
+      leaseExpiresAt: new Date(at.getTime() + this.#leaseMs),
       deadlineAt: new Date(at.getTime() + handover.timeoutSeconds * 1000),
       claimToken: `fake-claim-${handover.id}-${Math.random().toString(36).slice(2)}`,
     });
@@ -201,7 +203,7 @@ export class FakeHandovers {
       id: handover.id,
       action: handover.action,
       claimToken: handover.claimToken,
-      leaseSeconds: leaseMs / 1000,
+      leaseSeconds: this.#leaseMs / 1000,
       deadlineAt: iso(handover.deadlineAt),
       requestedAt: iso(handover.requestedAt),
       occurrence,
@@ -224,12 +226,12 @@ export class FakeHandovers {
       handler.lastSeenAt = at;
     }
     if (handover.state === "running") {
-      handover.leaseExpiresAt = new Date(at.getTime() + leaseMs);
+      handover.leaseExpiresAt = new Date(at.getTime() + this.#leaseMs);
       if (message !== undefined && handover.progress.length < 200) {
         handover.progress.push({ at: at.toISOString(), message: message.trim() });
       }
     }
-    return answer(200, { state: handover.state, leaseSeconds: leaseMs / 1000 });
+    return answer(200, { state: handover.state, leaseSeconds: this.#leaseMs / 1000 });
   }
 
   result(id: number, claimToken: string | undefined, result: HandoverResult): Answer {

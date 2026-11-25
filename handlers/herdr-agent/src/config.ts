@@ -53,6 +53,23 @@ function argumentsFrom(text: string | undefined): string[] {
   return parsed;
 }
 
+/** Who this handler is on the server, checked against what the server takes. */
+function identity(env: Env) {
+  const id = env["ACHTUNG_HANDLER_ID"]?.trim() || "herdr-agent";
+  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(id)) {
+    throw new Error("ACHTUNG_HANDLER_ID must be lowercase letters, digits and dashes");
+  }
+  const title = env["ACTION_TITLE"]?.trim() || "Investigate with Agent";
+  if (title.length > 40) {
+    throw new Error("ACTION_TITLE must be at most 40 characters");
+  }
+  const token = env["ACHTUNG_HANDLER_TOKEN"]?.trim() || undefined;
+  if (token !== undefined && /[^\x21-\x7e]/.test(token)) {
+    throw new Error("ACHTUNG_HANDLER_TOKEN must be one line of printable characters");
+  }
+  return { id, title, token };
+}
+
 /** The configuration from the environment; throws naming what is wrong, never a value. */
 export function loadConfig(env: Env = process.env): Config {
   const required = (name: string) => {
@@ -72,11 +89,12 @@ export function loadConfig(env: Env = process.env): Config {
   if (!/^[a-z][a-z0-9]*$/.test(kind)) {
     throw new Error("AGENT_KIND must be one of herdr's agent kinds, e.g. claude");
   }
+  const { id, title, token } = identity(env);
   return {
     server: required("ACHTUNG_URL"),
-    id: env["ACHTUNG_HANDLER_ID"]?.trim() || "herdr-agent",
-    token: env["ACHTUNG_HANDLER_TOKEN"]?.trim() || undefined,
-    title: env["ACTION_TITLE"]?.trim() || "Investigate with Agent",
+    id,
+    token,
+    title,
     maxConcurrent: whole(env, "MAX_CONCURRENT", 1, 1, 10),
     timeoutSeconds: whole(env, "TIMEOUT_SECONDS", 1200, 60, 3600),
     workDir: required("WORK_DIR").replace(/\/+$/, ""),

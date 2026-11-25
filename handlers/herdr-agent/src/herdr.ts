@@ -3,8 +3,14 @@ import { execFile } from "node:child_process";
 // herdr, as this handler uses it: a workspace per investigation, one agent in it. Every
 // call is an argument vector; nothing goes through a shell.
 
-/** Runs herdr with `args` and returns what it printed; rejects with its error message. */
-export type RunHerdr = (args: readonly string[]) => Promise<string>;
+/**
+ * Runs herdr with `args` and returns what it printed; rejects with its error message, also
+ * when it hasn't answered within `timeoutMs`.
+ */
+export type RunHerdr = (args: readonly string[], timeoutMs?: number) => Promise<string>;
+
+/** How long a call to herdr may take before it counts as hung; a wait gets its own. */
+const answerWithinMs = 30_000;
 
 /** herdr's own refusal, e.g. `agent_not_ready`, with the code it gave. */
 export class HerdrError extends Error {
@@ -31,9 +37,11 @@ function errorFrom(stderr: string, fallback: string): HerdrError {
 }
 
 export function herdrCommand(binary: string): RunHerdr {
-  return (args) =>
+  return (args, timeoutMs = answerWithinMs) =>
     new Promise((resolve, reject) => {
-      execFile(binary, [...args], { maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
+      // A herdr that hangs would otherwise hold the investigation, and its slot, for good.
+      const options = { maxBuffer: 4 * 1024 * 1024, timeout: timeoutMs };
+      execFile(binary, [...args], options, (error, stdout, stderr) => {
         if (error === null) {
           resolve(stdout);
         } else {
@@ -87,18 +95,8 @@ export function herdrFor(run: RunHerdr): Herdr {
     },
     startAgent: async (name, kind, pane, args) => {
       const own = args.length === 0 ? [] : ["--", ...args];
-      await run([
-        "agent",
-        "start",
-        name,
-        "--kind",
-        kind,
-        "--pane",
-        pane,
-        "--timeout",
-        "60000",
-        ...own,
-      ]);
+      const start = ["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", "60000"];
+      await run([...start, ...own], 75_000);
     },
     prompt: async (name, text) => {
       await run(["agent", "prompt", name, text]);
@@ -112,7 +110,8 @@ export function herdrFor(run: RunHerdr): Herdr {
     },
     wait: async (name, timeoutMs) => {
       // Its timeout is an error to herdr and the ordinary case here.
-      await run(["agent", "wait", name, "--timeout", String(timeoutMs)]).catch(() => {});
+      const wait = ["agent", "wait", name, "--timeout", String(timeoutMs)];
+      await run(wait, timeoutMs + 10_000).catch(() => {});
     },
     interrupt: async (name) => {
       await run(["agent", "send-keys", name, "esc"]);

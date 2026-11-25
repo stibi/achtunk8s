@@ -18,8 +18,13 @@ handler works with a hosted model or one on your own machine.
 **The alert leaves your network when the model is hosted.** Labels and annotations carry
 hostnames, namespaces and other topology. That is your decision per deployment:
 
-- `DROP_LABELS` and `DROP_ANNOTATIONS` name what is never sent, e.g.
-  `DROP_LABELS=instance,pod,node`.
+- `DROP_LABELS` and `DROP_ANNOTATIONS` name labels and annotations to leave out, e.g.
+  `DROP_LABELS=instance,pod,node`. Their values are also replaced by `[removed]` wherever
+  else the alert repeats them: a summary templated from a label, a link made from an
+  annotation. Values under three characters are left out but not replaced. **Not
+  removable:** the alert's title, its Achtung instance and channel names, and its
+  source link (the Prometheus address). Look at what is sent before trusting it with
+  your alerts.
 - A local model (below) sends nothing out.
 
 Alert text is untrusted: other systems write it. The handler sends it under fixed
@@ -38,18 +43,18 @@ LLM_BASE_URL=https://api.x.ai/v1 LLM_API_KEY=… LLM_MODEL=<a model of that API>
   pnpm --dir handlers/llm-analysis start
 ```
 
-| Variable                          |                                                                |
-| --------------------------------- | -------------------------------------------------------------- |
-| `ACHTUNG_URL`                     | Required. The Achtung server.                                  |
-| `ACHTUNG_HANDLER_ID`              | This handler's id on the server; `llm-analysis` when left out. |
-| `ACHTUNG_HANDLER_TOKEN`           | Its token, when the server sets `HANDLER_TOKENS`.              |
-| `LLM_BASE_URL`                    | Required. The API's base, ending before `/chat/completions`.   |
-| `LLM_API_KEY`                     | The API's key; left out for a local model that needs none.     |
-| `LLM_MODEL`                       | Required. The model's name in that API.                        |
-| `LLM_TIMEOUT_SECONDS`             | How long one answer may take; 120.                             |
-| `ACTION_TITLE`                    | What the button says; "Explain with a Model".                  |
-| `MAX_CONCURRENT`                  | Alerts answered at once; 4.                                    |
-| `DROP_LABELS`, `DROP_ANNOTATIONS` | Comma-separated names never sent to the model.                 |
+| Variable                          |                                                                      |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `ACHTUNG_URL`                     | Required. The Achtung server.                                        |
+| `ACHTUNG_HANDLER_ID`              | This handler's id on the server; `llm-analysis` when left out.       |
+| `ACHTUNG_HANDLER_TOKEN`           | Its token, when the server sets `HANDLER_TOKENS`.                    |
+| `LLM_BASE_URL`                    | Required. The API's base, ending before `/chat/completions`.         |
+| `LLM_API_KEY`                     | The API's key; left out for a local model that needs none.           |
+| `LLM_MODEL`                       | Required. The model's name in that API.                              |
+| `LLM_TIMEOUT_SECONDS`             | How long one answer may take; 120, at most 3500.                     |
+| `ACTION_TITLE`                    | What the button says, at most 40 characters; "Explain with a Model". |
+| `MAX_CONCURRENT`                  | Alerts answered at once; 4.                                          |
+| `DROP_LABELS`, `DROP_ANNOTATIONS` | Comma-separated names never sent to the model.                       |
 
 On the server, add the handler to `HANDLER_TOKENS` (`{"llm-analysis": "<token>"}`).
 

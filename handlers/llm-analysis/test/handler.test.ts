@@ -115,8 +115,8 @@ describe("the model handler", () => {
     expect(asked[0]?.body.model).toBe("example-model");
     expect(asked[0]?.body.messages.map((message) => message.role)).toEqual(["system", "user"]);
     const user = asked[0]?.body.messages[1]?.content ?? "";
-    expect(user.startsWith("BEGIN ALERT\n# KubePodCrashLooping\n")).toBe(true);
-    expect(user.endsWith("\nEND ALERT")).toBe(true);
+    expect(user).toMatch(/^BEGIN (ALERT-[0-9a-f]{16})\n# KubePodCrashLooping\n[\s\S]*\nEND \1$/);
+    expect(asked[0]?.body.messages[0]?.content).toContain(user.slice(6, 28));
     expect(user).toContain("pod=api-7c9d8b6f5-x2k4q");
   });
 
@@ -132,7 +132,7 @@ describe("the model handler", () => {
     expect(asked[0]?.authorization).toBe("Bearer an-example-key");
     expect(user).not.toContain("api-7c9d8b6f5-x2k4q");
     expect(user).not.toContain("namespace=");
-    expect(user).not.toContain("## Summary");
+    expect(user).not.toContain("KubePodCrashLooping in example-prod");
     expect(user).toContain("alertname=KubePodCrashLooping");
   });
 
@@ -143,6 +143,22 @@ describe("the model handler", () => {
     }));
 
     expect(handover).toMatchObject({ state: "failed", error: "The model's API answered 401" });
+  });
+
+  it("copes with an answer that isn't JSON, is a list of parts, or thinks aloud first", async () => {
+    const html = await explained(() => ({ status: 200, body: "<html>s3cret</html>" }));
+    const parts = await explained(() => ({
+      status: 200,
+      body: { choices: [{ message: { content: [{ type: "text", text: "Disk is full." }] } }] },
+    }));
+    const thinking = await explained(() =>
+      answer("<think>hmm, the pod…</think>\n\nThe pod is down."),
+    );
+
+    expect(html.handover.error).toBe("The model's API answered without any text");
+    expect(parts.handover.summary).toBe("Disk is full.");
+    expect(thinking.handover.summary).toBe("The pod is down.");
+    expect(thinking.handover.body).not.toContain("hmm");
   });
 
   it("fails the handover when the model says nothing", async () => {

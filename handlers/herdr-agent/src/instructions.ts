@@ -14,7 +14,8 @@ export function instructions(alertFile: string, resultFile: string, extra: strin
     `When you are done, write your findings as Markdown to ${resultFile}: first one sentence in`,
     "plain text saying what you concluded, then what you checked and what you found, then what",
     "you suggest doing. Say plainly what you could not check. Then stop.",
-    extra.trim(),
+    // On one line like the rest: a line break could send the prompt before its end.
+    extra.replaceAll(/\s+/g, " ").trim(),
   ]
     .filter((line) => line !== "")
     .join(" ");

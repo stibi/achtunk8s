@@ -12,7 +12,8 @@ import type {
 
 export const connectedWithinMs = 90_000;
 const claimWithinMs = 10 * 60_000;
-export const leaseMs = 2 * 60_000;
+/** The real server's lease; a test may run the fake with a shorter one. */
+export const defaultLeaseMs = 2 * 60_000;
 const idRule = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 export interface Handler extends Registration {

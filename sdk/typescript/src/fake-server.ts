@@ -16,6 +16,8 @@ export interface FakeServerOptions {
   /** Each handler's token, by handler id. None: the handler API is open. */
   readonly tokens?: Readonly<Record<string, string>>;
   readonly occurrences?: readonly Occurrence[];
+  /** The lease of a claimed handover, 120 as on the real server; shorter makes tests quick. */
+  readonly leaseSeconds?: number;
 }
 
 const at = "2026-11-15T09:30:00.000Z";
@@ -149,6 +151,7 @@ export async function startFakeServer(options: FakeServerOptions = {}) {
   const handovers = new FakeHandovers(
     options.occurrences ?? sampleOccurrences,
     options.now ?? (() => new Date()),
+    (options.leaseSeconds ?? 120) * 1000,
   );
   const tokens = options.tokens;
   const wake: (() => void)[] = [];

@@ -59,7 +59,9 @@ credentials and its network allow, not by what it was told:
    }
    ```
 
-   An example to start from, not a tested profile.
+   An example to start from, not a tested profile. The `deny` lines are a reminder,
+   not a control: there are many ways to spell a command. What keeps Secrets unread is
+   the role in point 1.
 4. What the agent can read, it can also write into its findings, which everyone who can
    open the alert sees. Keep secrets out of its reach.
 

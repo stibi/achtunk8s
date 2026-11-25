@@ -30,10 +30,19 @@ const names = (value: string | undefined) =>
     .map((name) => name.trim())
     .filter((name) => name !== "");
 
-function positive(env: Env, name: string, fallback: number): number {
+function whole(env: Env, name: string, fallback: number, max: number): number {
   const value = env[name] === undefined ? fallback : Number(env[name]);
-  if (!Number.isInteger(value) || value < 1) {
-    throw new Error(`${name} must be a whole number of at least 1`);
+  if (!Number.isInteger(value) || value < 1 || value > max) {
+    throw new Error(`${name} must be a whole number from 1 to ${max}`);
+  }
+  return value;
+}
+
+/** A secret from the environment; refused, unquoted, when it couldn't go into a header. */
+function secret(env: Env, name: string): string | undefined {
+  const value = env[name]?.trim() || undefined;
+  if (value !== undefined && /[^\x21-\x7e]/.test(value)) {
+    throw new Error(`${name} must be one line of printable characters without spaces`);
   }
   return value;
 }
@@ -54,17 +63,26 @@ export function loadConfig(env: Env = process.env): Config {
       throw new Error(`${name} must be an http or https URL`);
     }
   }
+  const id = env["ACHTUNG_HANDLER_ID"]?.trim() || "llm-analysis";
+  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(id)) {
+    throw new Error("ACHTUNG_HANDLER_ID must be lowercase letters, digits and dashes");
+  }
+  const title = env["ACTION_TITLE"]?.trim() || "Explain with a Model";
+  if (title.length > 40) {
+    throw new Error("ACTION_TITLE must be at most 40 characters");
+  }
   return {
     server: required("ACHTUNG_URL"),
-    id: env["ACHTUNG_HANDLER_ID"]?.trim() || "llm-analysis",
-    token: env["ACHTUNG_HANDLER_TOKEN"]?.trim() || undefined,
-    title: env["ACTION_TITLE"]?.trim() || "Explain with a Model",
-    maxConcurrent: positive(env, "MAX_CONCURRENT", 4),
+    id,
+    token: secret(env, "ACHTUNG_HANDLER_TOKEN"),
+    title,
+    maxConcurrent: whole(env, "MAX_CONCURRENT", 4, 20),
     model: {
       baseUrl: required("LLM_BASE_URL").replace(/\/+$/, ""),
-      apiKey: env["LLM_API_KEY"]?.trim() || undefined,
+      apiKey: secret(env, "LLM_API_KEY"),
       model: required("LLM_MODEL"),
-      timeoutSeconds: positive(env, "LLM_TIMEOUT_SECONDS", 120),
+      // The action's timeout is this plus a margin, and the server allows an hour.
+      timeoutSeconds: whole(env, "LLM_TIMEOUT_SECONDS", 120, 3500),
     },
     dropLabels: names(env["DROP_LABELS"]),
     dropAnnotations: names(env["DROP_ANNOTATIONS"]),

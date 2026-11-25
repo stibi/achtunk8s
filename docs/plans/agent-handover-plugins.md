@@ -1,11 +1,10 @@
 # Plan: hand an alert over to a plugin (handlers, actions, handovers)
 
-Status: **agreed 2026-11-15; phases 2 (the server), 3 (the SDK) and 4 (the macOS client)
-, 5 (the herdr agent handler) and 6 (the model handler) are built**. Not done: phase 1's
-runs on real alerts, and phase 7 (freezing `v1`, publishing). The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
-was built and where it differs from the sketch below: [Progress](#progress).
-It changes the public API and the schema, so each phase waits for the user's OK
-(AGENTS.md). Prerequisite: the change stream (ADR 0019) merged to `main`.
+Status: **agreed 2026-11-15; phases 2 to 6 are built** (the server, the SDK, the macOS
+client, the herdr agent handler, the model handler). Not done: phase 1's runs on real
+alerts, and phase 7 (freezing `v1`, publishing). The decisions are in section 9 and in
+ADR 0022 and ADR 0023 (accepted). What was built and where it differs from the sketch
+below: [Progress](#progress).
 
 It reshapes section 2 of
 [`dead-mans-switch-and-agent-handover.md`](dead-mans-switch-and-agent-handover.md)
@@ -812,6 +811,11 @@ an example manifest. Tested against the SDK's fake server and a fake model API. 
   no local model server were at hand. The local-model spike the plan requires is
   therefore still owed; the README has the setup (Ollama) and says it is untried.
 - It is not deployed anywhere.
+- A dropped label's or annotation's value is also replaced wherever else the alert
+  repeats it. The alert's title, its instance and channel names and its source link can't
+  be dropped; the README says so.
+- The alert is enclosed by a marker made anew for each question, instead of a fixed one
+  that alert text could imitate.
 
 **Phase 5, `handlers/herdr-agent`: built** (2026-11-25). Tested with herdr played from a
 script, against the SDK's fake server; its herdr calls were checked against the real
@@ -830,6 +834,8 @@ that check found, and what is open:
   alert**, and phase 1's question (are the findings worth having?) is unanswered.
 - Run as a systemd service it is untried; it was developed inside a herdr pane.
 - An example settings file for Claude Code is in the README, untested.
+- There is no systemd unit example, which the phase's row lists: how the handler reaches
+  a herdr session from a service is untried, and an example nobody ran would mislead.
 
 **Phase 7 (freeze `v1`, publish): not done**, on purpose. The plan freezes the protocol
 after both handlers have been used for real, and publishing needs an npm scope and a

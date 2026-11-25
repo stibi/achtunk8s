@@ -34,6 +34,13 @@ describe("loadConfig", () => {
     ["an agent kind with a space", { ...env, AGENT_KIND: "claude --x" }, "AGENT_KIND must be"],
     ["a timeout over an hour", { ...env, TIMEOUT_SECONDS: "3601" }, "TIMEOUT_SECONDS must be"],
     ["no concurrency", { ...env, MAX_CONCURRENT: "0" }, "MAX_CONCURRENT must be"],
+    [
+      "a title over 40 characters",
+      { ...env, ACTION_TITLE: "x".repeat(41) },
+      "ACTION_TITLE must be",
+    ],
+    ["a handler id that isn't one", { ...env, ACHTUNG_HANDLER_ID: "Herdr" }, "ACHTUNG_HANDLER_ID"],
+    ["a token over two lines", { ...env, ACHTUNG_HANDLER_TOKEN: "a\nb" }, "ACHTUNG_HANDLER_TOKEN"],
   ])("refuses %s, naming the variable", (_, values, message) => {
     expect(() => loadConfig(values)).toThrow(message);
   });

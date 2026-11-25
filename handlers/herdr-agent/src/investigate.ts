@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type Action,
@@ -22,26 +22,33 @@ export interface Pace {
 
 const defaultPace: Pace = { waitMs: 15_000, pauseMs: 2000, startLooks: 30 };
 
-/** The findings file as a result: its first line the summary, the rest the body. */
+/** Findings longer than this aren't read: the server takes 64 KiB, and an agent can write anything. */
+const maxFindingsBytes = 256 * 1024;
+
+/**
+ * The findings file as a result: its first line, as plain text, is the summary, and the
+ * whole file the body, so nothing the agent wrote is lost to the summary's length.
+ */
 function resultFrom(findings: string): HandoverResult | null {
-  const lines = findings.trim().split("\n");
-  const first = lines.findIndex((line) => line.trim() !== "");
-  if (first === -1) {
+  const text = findings.trim();
+  const first = text.split("\n").find((line) => line.trim() !== "");
+  if (first === undefined) {
     return null;
   }
-  const summary = (lines[first] ?? "")
+  const summary = first
     .replace(/^[#>*\-\s]+/, "")
     .replaceAll(/[*_`]/g, "")
     .trim();
-  return {
-    outcome: "succeeded",
-    summary: summary || "The agent finished",
-    body: lines
-      .slice(first + 1)
-      .join("\n")
-      .trim(),
-    links: [],
-  };
+  return { outcome: "succeeded", summary: summary || "The agent finished", body: text, links: [] };
+}
+
+/** What is in the findings file; nothing when it isn't there, or is too big to be findings. */
+async function findingsIn(path: string): Promise<string> {
+  const size = await stat(path).then(
+    (file) => file.size,
+    () => 0,
+  );
+  return size === 0 || size > maxFindingsBytes ? "" : readFile(path, "utf8");
 }
 
 /** One investigation: its agent in herdr, and the files the two sides exchange. */
@@ -59,7 +66,7 @@ async function written(
   { workspace, resultPath }: Investigation,
   hadItsChance: boolean,
 ): Promise<HandoverResult | null> {
-  const result = resultFrom(await readFile(resultPath, "utf8").catch(() => ""));
+  const result = resultFrom(await findingsIn(resultPath));
   if (result === null && hadItsChance) {
     throw new Error(
       `The agent stopped without writing its findings. Open herdr workspace ${workspace} to see why.`,
@@ -126,7 +133,8 @@ async function started(
       throw error;
     }
     await progress(`The agent asks something before it starts: see herdr, workspace ${workspace}`);
-    while ((await herdr.status(agent)) === "blocked") {
+    // Until it is ready for its prompt: not while it asks, nor while herdr can't tell yet.
+    while (["blocked", "unknown"].includes(await herdr.status(agent))) {
       signal.throwIfAborted();
       await herdr.wait(agent, pace.waitMs);
       await new Promise((resolve) => setTimeout(resolve, pace.pauseMs));
@@ -154,6 +162,10 @@ export function investigateAction(
       "reports what it found. You can open its workspace and steer it.",
     timeoutSeconds: config.timeoutSeconds,
     handle: async (handover, context) => {
+      // The id names a folder and an agent: a number, whatever a server claims to send.
+      if (!Number.isSafeInteger(handover.id) || handover.id < 1) {
+        throw new Error("The server sent a handover without a usable id");
+      }
       const folder = join("handovers", String(handover.id));
       const alertFile = join(folder, "alert.md");
       const resultFile = join(folder, "result.md");
@@ -166,13 +178,18 @@ export function investigateAction(
       const agent = `inv-${handover.id}`;
       const label = `achtung-${handover.id}`;
       const { workspace, pane } = await herdr.createWorkspace(config.workDir, label);
+      let agentStarted = false;
       try {
         await started(herdr, config, agent, pane, label, context, pace);
+        agentStarted = true;
+        // Cancelled or out of time while it started: nothing is typed into it.
+        context.signal.throwIfAborted();
         await herdr.prompt(agent, instructions(alertFile, resultFile, extraInstructions));
         await context.progress(`Agent ${agent} started in herdr, workspace ${label}`);
         return await findings(herdr, { agent, workspace: label, resultPath }, context, pace);
       } finally {
-        if (!config.keepWorkspace) {
+        // A workspace whose agent never started has nothing to read or go on in.
+        if (!config.keepWorkspace || !agentStarted) {
           await herdr.closeWorkspace(workspace).catch(() => {});
         }
       }

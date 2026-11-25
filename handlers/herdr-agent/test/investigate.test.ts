@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HandoverStopped, runHandler } from "@achtung/handover-sdk";
+import { runHandler } from "@achtung/handover-sdk";
 import { startFakeServer } from "@achtung/handover-sdk/fake-server";
 import { describe, expect, it, onTestFinished } from "vitest";
 import { loadConfig } from "../src/config.ts";
@@ -20,11 +20,18 @@ interface Script {
   writes?: { at: AgentStatus; text: string };
   /** Whether starting the agent stops at a question first. */
   asksFirst?: boolean;
+  /** Why starting the agent fails outright, e.g. its name is taken. */
+  startFails?: string;
 }
 
-async function investigated(script: Script, env: Record<string, string> = {}) {
+async function investigated(
+  script: Script,
+  env: Record<string, string> = {},
+  extra = "Use the lab context.",
+) {
   const workDir = await mkdtemp(join(tmpdir(), "achtung-herdr-"));
-  const achtung = await startFakeServer();
+  // A short lease, so a cancel reaches the handler within a second, not half a minute.
+  const achtung = await startFakeServer({ leaseSeconds: 2 });
   const config = loadConfig({ ACHTUNG_URL: achtung.url, WORK_DIR: workDir, ...env });
   const calls: string[] = [];
   let looks = 0;
@@ -38,6 +45,9 @@ async function investigated(script: Script, env: Record<string, string> = {}) {
     },
     startAgent: async (name, kind, pane, args) => {
       calls.push(`start ${name} ${kind} ${pane} ${JSON.stringify(args)}`);
+      if (script.startFails !== undefined) {
+        throw new HerdrError("failed", script.startFails);
+      }
       if (script.asksFirst) {
         throw new HerdrError("agent_not_ready", "blocked during startup");
       }
@@ -67,7 +77,7 @@ async function investigated(script: Script, env: Record<string, string> = {}) {
     waitSeconds: 1,
     signal: stop.signal,
     onEvent: () => {},
-    actions: [investigateAction(config, herdr, "Use the lab context.", pace)],
+    actions: [investigateAction(config, herdr, extra, pace)],
   });
   onTestFinished(async () => {
     stop.abort();
@@ -132,7 +142,7 @@ describe("the herdr agent handler", () => {
     expect(handover).toMatchObject({
       state: "succeeded",
       summary: "The api container runs out of memory.",
-      body: "## What I checked\n\nThe pod's events.",
+      body: findings.trim(),
     });
     expect(handover.progress.map((line) => line.message)).toEqual([
       "Agent inv-1 started in herdr, workspace achtung-1",
@@ -212,6 +222,54 @@ describe("the herdr agent handler", () => {
     expect(calls.some((call) => call.startsWith("prompt inv-1: "))).toBe(true);
   });
 
+  it("closes the workspace of an agent that never started, and says why it failed", async () => {
+    const { ended, calls } = await investigated({
+      startFails: "agent name inv-1 is already in use",
+      statuses: ["unknown"],
+    });
+
+    expect(await ended()).toMatchObject({
+      state: "failed",
+      error: "agent name inv-1 is already in use",
+    });
+    expect(calls.at(-1)).toBe("close w7");
+    expect(calls.some((call) => call.startsWith("prompt"))).toBe(false);
+  });
+
+  it("waits while herdr can't tell yet what an agent that asked first is doing", async () => {
+    const { ended, calls } = await investigated({
+      asksFirst: true,
+      statuses: ["blocked", "unknown", "unknown", "idle", "working", "done"],
+      writes: { at: "done", text: findings },
+    });
+
+    expect((await ended()).state).toBe("succeeded");
+    expect(calls.filter((call) => call.startsWith("prompt"))).toHaveLength(1);
+  });
+
+  it("puts the operator's own instructions on the prompt's one line", async () => {
+    const { calls, ended } = await investigated(
+      { statuses: ["working", "done"], writes: { at: "done", text: findings } },
+      {},
+      "Use the lab context.\n\nDashboards are in Grafana.\n",
+    );
+    await ended();
+
+    const prompt = calls.find((call) => call.startsWith("prompt inv-1: ")) ?? "";
+
+    expect(prompt).toContain("Use the lab context. Dashboards are in Grafana.");
+    expect(prompt).not.toContain("\n");
+  });
+
+  it("doesn't take a file too big to be findings", async () => {
+    const { ended } = await investigated({
+      statuses: ["working", "idle"],
+      writes: { at: "idle", text: "x".repeat(300 * 1024) },
+    });
+
+    expect((await ended()).state).toBe("failed");
+  });
+
   it("fails when the agent stops without findings, pointing at its workspace", async () => {
     const { ended } = await investigated({ statuses: ["working", "idle"] });
 
@@ -250,11 +308,5 @@ describe("the herdr agent handler", () => {
 
     expect(calls).toContain("interrupt inv-1");
     expect((await read()).state).toBe("cancelled");
-  }, 45_000);
-});
-
-describe("HandoverStopped", () => {
-  it("is what a cancelled investigation ends with", () => {
-    expect(new HandoverStopped("cancelled").message).toBe("The handover is cancelled");
   });
 });

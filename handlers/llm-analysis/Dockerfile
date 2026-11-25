@@ -19,5 +19,6 @@ COPY handlers/llm-analysis/src handlers/llm-analysis/src
 RUN mkdir -p handlers/llm-analysis/node_modules/@achtung && \
     ln -s /app/sdk/typescript handlers/llm-analysis/node_modules/@achtung/handover-sdk
 WORKDIR /app/handlers/llm-analysis
-USER node
+# By number, so Kubernetes can tell it isn't root (runAsNonRoot). It is the image's `node`.
+USER 1000
 CMD ["node", "src/main.ts"]
