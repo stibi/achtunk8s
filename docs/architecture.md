@@ -351,6 +351,11 @@ An alert can be handed over to a plugin, e.g. to have an agent investigate it
   `handlers/llm-analysis` asks a language model what an alert means, over the
   OpenAI-compatible chat API, hosted or local: fixed instructions, the alert fenced as
   data, named labels and annotations left out, no tools. It has its own `Dockerfile`.
+  `handlers/herdr-agent` starts a coding agent in a herdr workspace per handover: it
+  writes the alert to a file, gives the agent fixed instructions naming that file and a
+  result file, follows the agent through herdr's CLI (`src/herdr.ts`, argument vectors
+  only), says in the alert when the agent waits for a person, and posts the result file.
+  What the agent may touch is the operator's to bound; its README says how.
 - A result is untrusted text from another program. Links must be `http` or `https`
   (checked on the way in); clients render the body as text and load nothing from it.
 

@@ -67,9 +67,10 @@ you silence it where it came from.
   then shows the handler's progress and, when it is done, what it found, for everyone.
   Handlers are written against a small HTTP protocol
   ([`docs/handover-protocol.md`](docs/handover-protocol.md)), with an SDK for TypeScript
-  ([`sdk/typescript`](sdk/typescript/README.md)). The first handler,
-  [`handlers/llm-analysis`](handlers/llm-analysis/README.md), asks a language model, hosted
-  or local, what an alert means.
+  ([`sdk/typescript`](sdk/typescript/README.md)). Two handlers are in this repository:
+  [`handlers/llm-analysis`](handlers/llm-analysis/README.md) asks a language model, hosted
+  or local, what an alert means, and [`handlers/herdr-agent`](handlers/herdr-agent/README.md)
+  has a coding agent investigate it. Neither has run against real alerts yet.
 - **Keeps itself up to date:** the app checks for a new build once a day and installs
   it when you say so.
 - **Keyboard shortcuts** for search, refresh, Mark All as Read, Copy for Agent, Remind
@@ -335,11 +336,10 @@ to that API. [ADR 0026](docs/adr/0026-metrics-of-the-alerted-resource.md) (propo
   alerts when expected heartbeats *stop*: silence otherwise looks like health. The
   inbox would send a deep heartbeat (each Watchdog seen, time of the last ingest) and show
   the switches on Home.
-- **Investigate with an agent** (in progress). A handler that gives a handed-over alert
-  to a coding agent, which investigates read-only and posts its findings back to the
-  alert. The handover itself is built (above), and so is a handler that asks a
-  language model; the one that starts an agent in a terminal is next
-  ([plan](docs/plans/agent-handover-plugins.md)).
+- **Investigate with an agent** (in progress). The handover and both handlers are built
+  (above). Still to come: the agent handler's first runs on real alerts with read-only
+  credentials, the model handler's with a real and with a local model, and freezing the
+  plugin protocol as `v1` ([plan](docs/plans/agent-handover-plugins.md)).
 - **Acknowledgement** (planned): mark an alert as being worked on, for everyone.
 - **Users and collaboration** (future direction). Sign-in through OIDC, notes on an
   alert, comments on alerts and events in Live, perhaps very light messaging. Today

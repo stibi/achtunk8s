@@ -1,7 +1,8 @@
 # Plan: hand an alert over to a plugin (handlers, actions, handovers)
 
 Status: **agreed 2026-11-15; phases 2 (the server), 3 (the SDK) and 4 (the macOS client)
-and 6 (the model handler) are built**, the others are in progress or not started. The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
+, 5 (the herdr agent handler) and 6 (the model handler) are built**. Not done: phase 1's
+runs on real alerts, and phase 7 (freezing `v1`, publishing). The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
 was built and where it differs from the sketch below: [Progress](#progress).
 It changes the public API and the schema, so each phase waits for the user's OK
 (AGENTS.md). Prerequisite: the change stream (ADR 0019) merged to `main`.
@@ -811,6 +812,28 @@ an example manifest. Tested against the SDK's fake server and a fake model API. 
   no local model server were at hand. The local-model spike the plan requires is
   therefore still owed; the README has the setup (Ollama) and says it is untried.
 - It is not deployed anywhere.
+
+**Phase 5, `handlers/herdr-agent`: built** (2026-11-25). Tested with herdr played from a
+script, against the SDK's fake server; its herdr calls were checked against the real
+herdr 0.9.5 (workspace create and close, agent start and get, the error shape). What
+that check found, and what is open:
+
+- A Claude agent started in a directory it has never seen stops at "trust this folder?".
+  So the agents run in one configured, already trusted `WORK_DIR`, each handover in
+  `handovers/<id>/` under it, not in a directory per handover. When an agent does ask
+  before it starts, or later, the alert says so and waits.
+- The agent's result is a file the handler reads; nothing from the agent's pane is put
+  into the handover, since a pane can show anything a command printed.
+- The handler can't itself keep the agent from reaching the Achtung server, or make its
+  credentials read-only (decisions 6 and 8): that is the operator's setup, and its README
+  says so first. **Neither exists yet, so the handler has not investigated a real
+  alert**, and phase 1's question (are the findings worth having?) is unanswered.
+- Run as a systemd service it is untried; it was developed inside a herdr pane.
+- An example settings file for Claude Code is in the README, untested.
+
+**Phase 7 (freeze `v1`, publish): not done**, on purpose. The plan freezes the protocol
+after both handlers have been used for real, and publishing needs an npm scope and a
+publishing workflow, which are the user's decisions.
 
 Phase 1 (the spike on the VM) was not done first: it needs the agent's own read-only
 credentials (decision 8). It is still due before phase 5.

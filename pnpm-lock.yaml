@@ -170,6 +170,31 @@ importers:
         specifier: ^2.2.2
         version: 2.2.2
 
+  handlers/herdr-agent:
+    dependencies:
+      '@achtung/handover-sdk':
+        specifier: workspace:*
+        version: link:../../sdk/typescript
+    devDependencies:
+      '@biomejs/biome':
+        specifier: ^2.6.6
+        version: 2.6.6
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      jscpd:
+        specifier: ^5.4.3
+        version: 5.4.3
+      knip:
+        specifier: ^6.45.1
+        version: 6.45.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.12
+        version: 4.1.12(@types/node@24.19.2)(vite@8.3.8(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
   handlers/llm-analysis:
     dependencies:
       '@achtung/handover-sdk':
