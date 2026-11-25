@@ -23,8 +23,7 @@ function webUrl(value: string): string | null {
 /** "runbook_url" → "Runbook", "grafana-dashboard" → "Grafana dashboard". */
 function linkTitle(name: string): string {
   const words = name
-    .replace(/(\p{Ll})(\p{Lu})/gu, "$1 $2")
-    .split(/[_\-. ]/)
+    .split(/[_\-.]|(?<=\p{Ll})(?=\p{Lu})/u)
     .map((word) => word.toLowerCase())
     .filter((word) => word !== "" && word !== "url" && word !== "link");
   const [first, ...rest] = words;

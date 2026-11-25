@@ -2,7 +2,7 @@ import { describe, expect, it, onTestFinished } from "vitest";
 import type { HandlerClient } from "../src/client.ts";
 import { handlerClient } from "../src/client.ts";
 import { type Action, type HandlerEvent, HandoverStopped, runHandler } from "../src/run-handler.ts";
-import { fakeServer } from "./fake.ts";
+import { fakeServer, until } from "./fake.ts";
 
 // runHandler against the fake server: the loop a plugin author doesn't write.
 
@@ -62,16 +62,6 @@ async function running(
     return read(id);
   };
   return { server, stop, done, events, handOver, read, ended, json };
-}
-
-async function until(condition: () => boolean | Promise<boolean>) {
-  for (let tries = 0; tries < 200; tries++) {
-    if (await condition()) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  throw new Error("the condition never held");
 }
 
 describe("runHandler", () => {
@@ -227,6 +217,61 @@ describe("runHandler", () => {
     expect(events.filter((event) => event.kind === "error")).toHaveLength(2);
   }, 15_000);
 
+  it("posts the result again after an outage, so it isn't lost", async () => {
+    let failures = 2;
+    const { handOver, ended, events } = await running(
+      { handle: async () => ({ outcome: "succeeded", summary: "Found it", body: "" }) },
+      (real) => ({
+        ...real,
+        answer: (...args) => {
+          if (failures > 0) {
+            failures -= 1;
+            return Promise.reject(new Error("fetch failed"));
+          }
+          return real.answer(...args);
+        },
+      }),
+    );
+
+    expect(await ended(await handOver())).toMatchObject({
+      state: "succeeded",
+      summary: "Found it",
+    });
+    expect(events.filter((event) => event.kind === "error")).toHaveLength(2);
+  }, 15_000);
+
+  it("doesn't fail the work because a status line didn't get through", async () => {
+    const { handOver, ended, events } = await running(
+      {
+        handle: async (_, { progress }) => {
+          await progress("looking");
+          return { outcome: "succeeded", summary: "Done", body: "" };
+        },
+      },
+      (real) => ({ ...real, progress: () => Promise.reject(new Error("fetch failed")) }),
+    );
+
+    expect((await ended(await handOver())).state).toBe("succeeded");
+    expect(events).toContainEqual(expect.objectContaining({ kind: "error" }));
+  });
+
+  it("keeps a link whose title is empty, under its URL cut to fit", async () => {
+    const url = `https://grafana.example.com/d/${"x".repeat(150)}`;
+    const { handOver, ended } = await running({
+      handle: async () => ({
+        outcome: "succeeded",
+        summary: "Done",
+        body: "",
+        links: [{ title: " ", url }],
+      }),
+    });
+
+    const handover = await ended(await handOver());
+
+    expect(handover.state).toBe("succeeded");
+    expect(handover.links).toEqual([{ title: `${url.slice(0, 99)}…`, url }]);
+  });
+
   it("stops when its signal aborts, telling running work to stop and failing it", async () => {
     let reason: unknown;
     const { handOver, read, stop, done } = await running({
@@ -246,30 +291,5 @@ describe("runHandler", () => {
 
     expect((reason as HandoverStopped).state).toBe("stopping");
     expect(await read(id)).toMatchObject({ state: "failed", error: "The handler is stopping" });
-  });
-});
-
-describe("handlerClient", () => {
-  it("sends the handler's token, and reports a refusal with the server's reason", async () => {
-    const server = await fakeServer({ tokens: { tester: "the-right-token-0123" } });
-    const registration = { name: "Tester", version: "1", actions: [{ id: "look", title: "Look" }] };
-    const client = (token?: string) =>
-      handlerClient({ server: `${server.url}/`, id: "tester", token });
-
-    await expect(client("the-right-token-0123").register(registration)).resolves.toBeUndefined();
-    await expect(client("a-wrong-token").register(registration)).rejects.toMatchObject({
-      name: "HandlerApiError",
-      status: 401,
-      message: "register: 401 A handler token is required",
-    });
-    expect(await client("the-right-token-0123").claim(0)).toEqual({ kind: "none" });
-  });
-
-  it("says when the server doesn't know the handler", async () => {
-    const server = await fakeServer();
-
-    expect(await handlerClient({ server: server.url, id: "nobody" }).claim(0)).toEqual({
-      kind: "unregistered",
-    });
   });
 });

@@ -1,4 +1,9 @@
-import { type ClientOptions, type HandlerClient, handlerClient } from "./client.ts";
+import {
+  type ClientOptions,
+  HandlerApiError,
+  type HandlerClient,
+  handlerClient,
+} from "./client.ts";
 import type {
   ActionRegistration,
   ClaimedHandover,
@@ -46,8 +51,15 @@ export interface HandlerOptions extends ClientOptions {
   readonly maxConcurrent?: number;
   /** Stops the handler: running work is told to stop, then `runHandler` returns. */
   readonly signal?: AbortSignal;
-  /** How long a claim waits for a handover, at most 30 seconds; 10 when left out. */
+  /**
+   * How long running work gets to stop after `signal` aborted, before `runHandler` returns
+   * without it; 10 seconds when left out. Work that ignores its signal is left behind, and
+   * its handover fails on the server as "handler lost".
+   */
+  readonly stopGraceSeconds?: number;
+  /** How long a claim waits for a handover, 1 to 30 seconds; 10 when left out. */
   readonly waitSeconds?: number;
+  /** What the loop does, for your logs. Left out, errors are written to stderr. */
   readonly onEvent?: (event: HandlerEvent) => void;
   /** A client to use instead of one made from `server`, `id` and `token`. */
   readonly client?: HandlerClient;
@@ -55,15 +67,29 @@ export interface HandlerOptions extends ClientOptions {
 
 const maxPause = 30_000;
 
+/** Errors go to stderr unless the handler takes the events itself: none is swallowed. */
+function toStderr(event: HandlerEvent): void {
+  if (event.kind === "error") {
+    const reason = event.error instanceof Error ? event.error.message : String(event.error);
+    process.stderr.write(`achtung handler: ${event.during}: ${reason}\n`);
+  }
+}
+
+/** A refusal that asking again won't change: a wrong token or an invalid registration. */
+const isFinal = (error: unknown) =>
+  error instanceof HandlerApiError && [400, 401, 403].includes(error.status);
+
 /**
  * Runs a handler until `signal` aborts: registers its actions, claims handovers, keeps
  * each one's lease alive while `handle` works, and posts what `handle` returns. Outages of
- * the server are retried with a growing pause.
+ * the server are retried with a growing pause. It rejects when the server refuses the
+ * handler for good: its token (401, 403) or its registration (400).
  */
 export async function runHandler(options: HandlerOptions): Promise<void> {
   const client = options.client ?? handlerClient(options);
   const stopping = options.signal ?? new AbortController().signal;
-  const report = options.onEvent ?? (() => {});
+  const report = options.onEvent ?? toStderr;
+  const waitSeconds = Math.min(30, Math.max(1, options.waitSeconds ?? 10));
   const running = new Set<Promise<void>>();
   const registration = {
     name: options.name,
@@ -71,7 +97,6 @@ export async function runHandler(options: HandlerOptions): Promise<void> {
     actions: options.actions.map(({ handle: _, ...action }) => action),
   };
   let registered = false;
-  let pause = 0;
 
   /** One round of the loop. Returns whether it went well, so the pause resets. */
   const round = async (): Promise<void> => {
@@ -81,10 +106,14 @@ export async function runHandler(options: HandlerOptions): Promise<void> {
       report({ kind: "registered" });
     }
     if (running.size >= (options.maxConcurrent ?? 1)) {
-      await Promise.race([...running, aborted(stopping)]);
+      await untilAborted(stopping, Promise.race(running));
       return;
     }
-    const claim = await client.claim(options.waitSeconds ?? 10, stopping);
+    // Its own time limit: a connection that died silently would hang the loop for minutes.
+    const claim = await client.claim(
+      waitSeconds,
+      AbortSignal.any([stopping, AbortSignal.timeout((waitSeconds + 15) * 1000)]),
+    );
     if (claim.kind === "unregistered") {
       registered = false;
     } else if (claim.kind === "busy") {
@@ -97,30 +126,54 @@ export async function runHandler(options: HandlerOptions): Promise<void> {
     }
   };
 
+  await repeated(round, stopping, report);
+  await Promise.race([Promise.all(running), sleep((options.stopGraceSeconds ?? 10) * 1000)]);
+}
+
+/** Runs `round` until `stopping` aborts, pausing longer after each failure in a row. */
+async function repeated(
+  round: () => Promise<void>,
+  stopping: AbortSignal,
+  report: (event: HandlerEvent) => void,
+): Promise<void> {
+  let pause = 0;
   while (!stopping.aborted) {
     try {
       await round();
       pause = 0;
     } catch (error) {
+      if (isFinal(error)) {
+        throw error;
+      }
       if (!stopping.aborted) {
         report({ kind: "error", during: "claiming", error });
-        pause = Math.min(maxPause, Math.max(1000, pause * 2));
-        await Promise.race([sleep(pause), aborted(stopping)]);
+        pause = nextPause(pause);
+        await untilAborted(stopping, sleep(pause));
       }
     }
   }
-  await Promise.all(running);
 }
+
+const nextPause = (pause: number) => Math.min(maxPause, Math.max(1000, pause * 2));
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref());
 
-const aborted = (signal: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    if (signal.aborted) {
-      resolve();
-    }
-    signal.addEventListener("abort", () => resolve(), { once: true });
+/** Waits for `work`, or for `signal` to abort, whichever comes first. */
+async function untilAborted(signal: AbortSignal, work: Promise<unknown>): Promise<void> {
+  if (signal.aborted) {
+    return;
+  }
+  let stop = () => {};
+  const aborted = new Promise<void>((resolve) => {
+    stop = resolve;
+    signal.addEventListener("abort", stop, { once: true });
   });
+  try {
+    await Promise.race([work, aborted]);
+  } finally {
+    signal.removeEventListener("abort", stop);
+  }
+}
 
 /** Why work on a handover should stop: where the handover is, or that the handler stops. */
 export class HandoverStopped extends Error {
@@ -149,18 +202,27 @@ async function workOn(
   if (stopping.aborted) {
     onStopping();
   }
-  /** Renews the lease; the server's answer says whether to go on. */
+  /**
+   * Renews the lease; the server's answer says whether to go on. A call that fails is
+   * reported, not thrown: the next one may get through, and a status line that didn't
+   * must not fail the work.
+   */
   const beat = async (message?: string) => {
-    const state = await client.progress(handover, message);
-    if (state !== "running") {
-      stopFor(state);
+    try {
+      const state = await client.progress(handover, message);
+      if (state !== "running") {
+        stopFor(state);
+      }
+    } catch (error) {
+      report({ kind: "error", during: `renewing handover ${handover.id}`, error });
+      // The server no longer takes this handover from us: no result would be accepted.
+      if (error instanceof HandlerApiError && [403, 404].includes(error.status)) {
+        stopFor("failed");
+      }
     }
   };
   // Four times per lease, so a lost call or two doesn't lose the handover.
-  const heartbeat = setInterval(
-    () => void beat().catch((error) => report({ kind: "error", during: "renewing", error })),
-    (handover.leaseSeconds * 1000) / 4,
-  );
+  const heartbeat = setInterval(() => void beat(), (handover.leaseSeconds * 1000) / 4);
   try {
     const result = await handled(options, handover, {
       signal: stop.signal,
@@ -175,7 +237,7 @@ async function workOn(
       report({ kind: "stopped", handover: handover.id, state: stop.signal.reason.state });
       return;
     }
-    await answer(client, handover, result, report);
+    await answer(client, handover, result, report, stop.signal);
   } catch (error) {
     report({ kind: "error", during: `handover ${handover.id}`, error });
   } finally {
@@ -204,17 +266,49 @@ async function handled(
 /** A result within the server's limits: cleaned, and cut where it is too long. */
 function fitted(result: HandoverResult): HandoverResult {
   if (result.outcome === "failed") {
-    return { outcome: "failed", error: cut(result.error.trim(), 2000) || "The handler failed" };
+    return {
+      outcome: "failed",
+      error: cut(clean(result.error).trim(), 2000) || "The handler failed",
+    };
   }
   return {
     outcome: "succeeded",
     summary: cut(oneLine(result.summary), 300) || "Done",
     body: cut(result.body, 65_536),
     links: (result.links ?? []).slice(0, 10).map(({ title, url }) => ({
-      title: cut(clean(title).trim(), 100) || url,
+      title: cut(clean(title).trim(), 100) || cut(url, 100),
       url,
     })),
   };
+}
+
+/**
+ * Posts `result` until the server has an answer for it: an outage is retried with a
+ * growing pause, since the same result sent again is answered as before. Gives up when the
+ * handover ended on the server, or at `giveUpAt`.
+ */
+async function posted(
+  client: HandlerClient,
+  handover: ClaimedHandover,
+  result: HandoverResult,
+  report: (event: HandlerEvent) => void,
+  stop: AbortSignal,
+  giveUpAt: number,
+): Promise<Awaited<ReturnType<HandlerClient["answer"]>>> {
+  const endedOnServer = () =>
+    stop.reason instanceof HandoverStopped && stop.reason.state !== "stopping";
+  for (let pause = 0; ; ) {
+    try {
+      return await client.answer(handover, result);
+    } catch (error) {
+      report({ kind: "error", during: `answering handover ${handover.id}`, error });
+      pause = nextPause(pause);
+      if (endedOnServer() || isFinal(error) || Date.now() + pause > giveUpAt) {
+        return { kind: "too-late" };
+      }
+      await sleep(pause);
+    }
+  }
 }
 
 async function answer(
@@ -222,17 +316,27 @@ async function answer(
   handover: ClaimedHandover,
   result: HandoverResult,
   report: (event: HandlerEvent) => void,
+  stop: AbortSignal,
 ): Promise<void> {
+  // By this machine's clock, which needn't agree with the server's: the time the server
+  // gave the handover from when it was asked for, counted from now. Past it, the server
+  // has timed the handover out.
+  const allowed =
+    new Date(handover.deadlineAt).getTime() - new Date(handover.requestedAt).getTime();
+  const giveUpAt = Date.now() + allowed;
   const sent = fitted(result);
-  let answered = await client.answer(handover, sent);
+  let answered = await posted(client, handover, sent, report, stop, giveUpAt);
   let outcome = sent.outcome;
   if (answered.kind === "refused") {
     // E.g. a link that isn't http(s): the person waiting still learns what happened.
+    const reason = answered.reason;
     outcome = "failed";
-    answered = await client.answer(handover, {
-      outcome,
-      error: cut(`The server refused the handler's result: ${answered.reason}`, 2000),
-    });
+    const error = cut(`The server refused the handler's result: ${reason}`, 2000);
+    answered = await posted(client, handover, { outcome, error }, report, stop, giveUpAt);
+    if (answered.kind === "refused") {
+      report({ kind: "error", during: `answering handover ${handover.id}`, error: reason });
+      return;
+    }
   }
   report(
     answered.kind === "ended"

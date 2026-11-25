@@ -68,6 +68,8 @@ export const registration = {
 export const register = (target: Target, body: unknown = registration) =>
   call(target, "PUT", `${api}/handlers/${handler}`, body);
 
+export const remove = (target: Target) => call(target, "DELETE", `${api}/handlers/${handler}`);
+
 export const handOver = (target: Target, action = "look") =>
   call<HandoverView>(target, "POST", `/api/occurrences/${target.occurrenceId}/handovers`, {
     handler,
@@ -86,9 +88,8 @@ export const progress = (target: Target, id: number, claimToken: string, message
     "POST",
     `${api}/handovers/${id}/progress`,
     message === undefined ? {} : { message },
-    {
-      "achtung-claim": claimToken,
-    },
+    // Left out when empty: a call that forgot the header.
+    claimToken === "" ? {} : { "achtung-claim": claimToken },
   );
 
 export const answer = (target: Target, id: number, claimToken: string, result: unknown) =>

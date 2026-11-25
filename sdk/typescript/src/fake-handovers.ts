@@ -4,10 +4,11 @@ import {
   applies,
   connectedWithinMs,
   type Handler,
-  idRule,
   invalidResult,
   isActive,
+  isMessage,
   iso,
+  isRegistration,
   leaseMs,
   refuse,
   type StoredHandover,
@@ -62,15 +63,7 @@ export class FakeHandovers {
 
   register(id: string, registration: Registration): Answer {
     const at = this.#settled();
-    const actions = registration.actions ?? [];
-    const valid =
-      idRule.test(id) &&
-      typeof registration.name === "string" &&
-      registration.name.trim() !== "" &&
-      typeof registration.version === "string" &&
-      actions.length > 0 &&
-      actions.every((action) => idRule.test(action.id) && typeof action.title === "string");
-    if (!valid) {
+    if (!isRegistration(id, registration)) {
       return refuse(400, "body/ an invalid registration");
     }
     this.#handlers.set(id, { ...registration, lastSeenAt: at });
@@ -222,6 +215,9 @@ export class FakeHandovers {
     const handover = this.#held(id, claimToken);
     if ("status" in handover) {
       return handover;
+    }
+    if (!isMessage(message)) {
+      return refuse(400, "body/message 1 to 500 characters");
     }
     const handler = this.#handlers.get(handover.handler);
     if (handler !== undefined) {

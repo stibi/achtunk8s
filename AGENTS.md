@@ -29,7 +29,8 @@ pnpm --dir server run test:mutation # mutation tests (slow; runs nightly in CI)
 Plugins hand alerts over to programs outside Achtung (ADR 0022). `sdk/typescript/` is the
 SDK for writing one, a handler: read `docs/handover-protocol.md` and its `README.md` first.
 Its conformance scenarios also run against the real server (`server/test/http/handover-conformance.test.ts`),
-so a change to the handler API changes the scenarios and the fake server with it.
+so a change to the handler API changes the scenarios and the fake server with it. The SDK's own
+check doesn't run them against the real server: after changing a scenario, run that test.
 
 ```bash
 pnpm --dir sdk/typescript run check        # typecheck, lint, dead code, duplication, tests (no Docker)

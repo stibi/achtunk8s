@@ -59,7 +59,13 @@ alive while `handle` works, and posts what it returns. It runs until its `signal
 - **`appliesTo`** on an action limits it to some alerts: `instances`, `severities`,
   `labels` (exact), all of which must match.
 - **`onEvent`** reports what the loop does (registered, claimed, ended, stopped, error),
-  for your logs. Outages of the server are retried with a growing pause.
+  for your logs. Without it, errors are written to stderr. Outages of the server are
+  retried with a growing pause, also for a result, which isn't lost to one. A refusal that
+  asking again won't change (a wrong token, an invalid registration) rejects out of
+  `runHandler`.
+- **`signal`** stops the handler. Running work is told to stop and gets
+  `stopGraceSeconds` (10) to do so; work that ignores its signal is left behind, and its
+  handover fails on the server as "handler lost".
 - A result is fitted to the server's limits rather than lost: a summary becomes one line
   of at most 300 characters, a body is cut at 64 KiB, NUL characters go.
 
@@ -80,12 +86,15 @@ They are in the protocol page, and they matter more than the API:
 ## Try it without a server
 
 ```bash
-pnpm --dir sdk/typescript run dev            # a fake Achtung on :8790
+pnpm --dir sdk/typescript run dev                                     # a fake Achtung on :8790
 pnpm --dir sdk/typescript run dev --token echo=a-long-example-token
 ```
 
 The fake server has two made-up alerts and prints the `curl` commands that hand one over
-and read the result. It keeps everything in memory.
+and read the result. It keeps everything in memory. It applies the real server's limits
+and state rules, which the conformance scenarios hold it to; its token check is simpler
+(any listed handler's token is taken on the handover routes) and is not held to the real
+one.
 
 ## Test your handler
 

@@ -13,7 +13,7 @@ import type {
 export const connectedWithinMs = 90_000;
 const claimWithinMs = 10 * 60_000;
 export const leaseMs = 2 * 60_000;
-export const idRule = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const idRule = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 export interface Handler extends Registration {
   lastSeenAt: Date;
@@ -61,32 +61,75 @@ export function applies(action: ActionRegistration, occurrence: Occurrence): boo
   );
 }
 
-function isWebUrl(value: string): boolean {
-  const url = URL.canParse(value) ? new URL(value) : null;
-  return url !== null && /^https?:$/.test(url.protocol) && url.username === "";
+function isWebUrl(value: unknown): boolean {
+  const url =
+    typeof value === "string" && value.length <= 2000 && URL.canParse(value)
+      ? new URL(value)
+      : null;
+  return (
+    url !== null && /^https?:$/.test(url.protocol) && url.username === "" && url.password === ""
+  );
 }
+
+/** Text the server takes: a string of `min` to `max` characters once trimmed, without NUL. */
+function isText(value: unknown, min: number, max: number): value is string {
+  return (
+    typeof value === "string" &&
+    value.isWellFormed() &&
+    !value.includes("\0") &&
+    value.trim().length >= min &&
+    value.trim().length <= max
+  );
+}
+
+function isAction(action: ActionRegistration): boolean {
+  const timeout = action.timeoutSeconds ?? 900;
+  return (
+    idRule.test(action.id) &&
+    isText(action.title, 1, 40) &&
+    isText(action.description ?? "", 0, 200) &&
+    Number.isInteger(timeout) &&
+    timeout >= 60 &&
+    timeout <= 3600
+  );
+}
+
+/** Whether the server would take this registration, by the limits of the handler API. */
+export function isRegistration(id: string, registration: Registration): boolean {
+  const actions = Array.isArray(registration.actions) ? registration.actions : [];
+  return (
+    idRule.test(id) &&
+    isText(registration.name, 1, 60) &&
+    isText(registration.version, 1, 40) &&
+    actions.length >= 1 &&
+    actions.length <= 10 &&
+    new Set(actions.map((action) => action.id)).size === actions.length &&
+    actions.every(isAction)
+  );
+}
+
+/** A progress message the server takes: none, or 1 to 500 characters. */
+export const isMessage = (message: unknown) => message === undefined || isText(message, 1, 500);
 
 /** Why a result isn't one the server takes; null when it is. */
 export function invalidResult(result: HandoverResult): string | null {
   if (result.outcome === "failed") {
-    return typeof result.error === "string" && result.error.trim() !== "" ? null : "body/error";
+    return isText(result.error, 1, 2000) ? null : "body/error";
   }
   if (result.outcome !== "succeeded") {
     return "body/outcome";
   }
-  if (
-    typeof result.summary !== "string" ||
-    result.summary.trim() === "" ||
-    /[\r\n]/.test(result.summary)
-  ) {
-    return "body/summary";
+  if (!isText(result.summary, 1, 300) || /[\r\n]/.test(result.summary)) {
+    return "body/summary one line of at most 300 characters";
+  }
+  if (!isText(result.body, 0, 65_536) || result.body.length > 65_536) {
+    return "body/body";
   }
   const links = result.links ?? [];
-  return typeof result.body === "string" &&
-    links.length <= 10 &&
-    links.every((link) => isWebUrl(link.url))
+  return links.length <= 10 &&
+    links.every((link) => isText(link.title, 1, 100) && isWebUrl(link.url))
     ? null
-    : "body/links an http or https URL";
+    : "body/links an http or https URL, without credentials";
 }
 
 /** How the clock alone ends a handover at `at`; null while it may go on. */

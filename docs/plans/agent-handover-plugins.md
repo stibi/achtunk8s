@@ -774,8 +774,9 @@ differ from the sketch in section 2, they are right. The differences:
   which the server's tests run against the real server, hold the hand-written ones to it.
 - `agentReport` is tested against the same alert and the same expected text as the
   Swift `AgentReport` test, copied into the SDK's test, not read from one shared file.
-- The fake server is started with `pnpm --dir sdk/typescript run dev`; the
-  `achtung-handover` command exists for when the package is installed elsewhere.
+- The fake server is started with `pnpm --dir sdk/typescript run dev`. There is no
+  installed `achtung-handover` command yet: Node doesn't strip types under
+  `node_modules`, so that waits for the package being built and published (phase 7).
 - The `curl` handler in the protocol page is still not run in CI. The conformance
   scenarios cover the same calls.
 - The SDK also cleans and cuts a result to the server's limits (one-line summary, 64 KiB

@@ -12,9 +12,6 @@
     "./conformance": "./conformance/index.ts",
     "./fake-server": "./src/fake-server.ts"
   },
-  "bin": {
-    "achtung-handover": "./bin/achtung-handover.ts"
-  },
   "scripts": {
     "dev": "node bin/achtung-handover.ts dev",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run deadcode && pnpm run dupes && pnpm run test",

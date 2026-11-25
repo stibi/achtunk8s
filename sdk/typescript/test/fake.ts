@@ -14,3 +14,14 @@ export async function fakeServer(options: Omit<FakeServerOptions, "now" | "port"
     },
   };
 }
+
+/** Waits until `condition` holds, for at most five seconds. */
+export async function until(condition: () => boolean | Promise<boolean>) {
+  for (let tries = 0; tries < 200; tries++) {
+    if (await condition()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("the condition never held");
+}

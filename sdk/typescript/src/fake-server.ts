@@ -64,6 +64,17 @@ async function jsonOf(request: IncomingMessage): Promise<unknown> {
   return text === "" ? {} : JSON.parse(text);
 }
 
+class InvalidBody extends Error {}
+
+/** The request's JSON body; a 400 when it isn't JSON. */
+async function bodyOf(request: IncomingMessage): Promise<unknown> {
+  try {
+    return await jsonOf(request);
+  } catch {
+    throw new InvalidBody("body/ not valid JSON");
+  }
+}
+
 type Route = (
   match: RegExpMatchArray,
   body: never,
@@ -72,7 +83,7 @@ type Route = (
 
 function routesFor(
   handovers: FakeHandovers,
-  claim: (handler: string, waitSeconds: number) => Promise<Answer>,
+  claim: (handler: string, waitSeconds: number, request: IncomingMessage) => Promise<Answer>,
 ) {
   const id = (match: RegExpMatchArray) => Number(match[1]);
   const claimOf = (request: IncomingMessage) => {
@@ -89,7 +100,7 @@ function routesFor(
     [
       "POST",
       /^\/api\/handler\/v0\/handlers\/([^/]+)\/claim(?:\?wait=(\d+))?$/,
-      (m) => claim(m[1] ?? "", Math.min(30, Number(m[2] ?? 10))),
+      (m, _body, request) => claim(m[1] ?? "", Number(m[2] ?? 10), request),
     ],
     [
       "POST",
@@ -148,9 +159,20 @@ export async function startFakeServer(options: FakeServerOptions = {}) {
   };
 
   /** The handler's next handover, waiting up to `waitSeconds` for one. */
-  const claim = async (handler: string, waitSeconds: number): Promise<Answer> => {
+  const claim = async (
+    handler: string,
+    waitSeconds: number,
+    request: IncomingMessage,
+  ): Promise<Answer> => {
+    if (waitSeconds > 30) {
+      return { status: 400, body: { error: "querystring/wait at most 30" } };
+    }
     const until = Date.now() + waitSeconds * 1000;
     for (;;) {
+      // Nothing is taken for a caller that hung up, e.g. a handler restarted mid-wait.
+      if (request.socket.destroyed) {
+        return { status: 204, body: null };
+      }
       const answer = handovers.claim(handler);
       const left = until - Date.now();
       if (answer.status !== 204 || left <= 0) {
@@ -158,6 +180,7 @@ export async function startFakeServer(options: FakeServerOptions = {}) {
       }
       await new Promise<void>((resolve) => {
         wake.push(resolve);
+        request.socket.once("close", resolve);
         setTimeout(resolve, left).unref();
       });
     }
@@ -172,7 +195,7 @@ export async function startFakeServer(options: FakeServerOptions = {}) {
       const match = request.method === method ? url.match(pattern) : null;
       if (match !== null) {
         return (
-          forbidden(request, url) ?? (await route(match, (await jsonOf(request)) as never, request))
+          forbidden(request, url) ?? (await route(match, (await bodyOf(request)) as never, request))
         );
       }
     }
@@ -181,7 +204,10 @@ export async function startFakeServer(options: FakeServerOptions = {}) {
 
   const server = createServer((request, response) => {
     void respond(request)
-      .catch((): Answer => ({ status: 400, body: { error: "body/ not valid JSON" } }))
+      .catch((error): Answer => {
+        const reason = error instanceof Error ? error.message : String(error);
+        return { status: error instanceof InvalidBody ? 400 : 500, body: { error: reason } };
+      })
       .then(({ status, body }) => {
         response.writeHead(status, { "content-type": "application/json" });
         response.end(body === null ? undefined : JSON.stringify(body));

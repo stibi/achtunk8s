@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { clockScenarios, type Scenario } from "./clock.ts";
 import {
   answer,
   cancel,
@@ -12,19 +13,16 @@ import {
   read,
   register,
   registration,
+  remove,
   type Target,
 } from "./target.ts";
 
+export type { Scenario } from "./clock.ts";
 export type { Target } from "./target.ts";
 
 // The handover protocol (docs/handover-protocol.md) as scenarios against a server's HTTP
 // API. Each needs a fresh server. The real server and the SDK's fake server both pass them;
 // that is what keeps the fake honest.
-
-export interface Scenario {
-  readonly name: string;
-  run(target: Target): Promise<void>;
-}
 
 const stateOf = async (target: Target, id: number) => (await read(target, id)).body.state;
 
@@ -71,6 +69,52 @@ export const scenarios: readonly Scenario[] = [
     name: "a registration without actions is refused",
     run: async (target) => {
       assert.equal((await register(target, { ...registration, actions: [] })).status, 400);
+    },
+  },
+  {
+    name: "a registration over the limits is refused",
+    run: async (target) => {
+      const withAction = (action: object) => ({
+        ...registration,
+        actions: [{ id: "look", title: "Look", ...action }],
+      });
+
+      const replies = await Promise.all([
+        register(target, withAction({ title: "x".repeat(41) })),
+        register(target, withAction({ timeoutSeconds: 59 })),
+        register(target, withAction({ timeoutSeconds: 3601 })),
+        register(target, withAction({ description: "x".repeat(201) })),
+        register(target, { ...registration, name: "x".repeat(61) }),
+        register(target, {
+          ...registration,
+          actions: [...registration.actions, ...registration.actions],
+        }),
+      ]);
+
+      assert.deepEqual(
+        replies.map((reply) => reply.status),
+        [400, 400, 400, 400, 400, 400],
+      );
+    },
+  },
+  {
+    name: "a handler the server forgot is told so when it claims",
+    run: async (target) => {
+      await register(target);
+
+      assert.equal((await remove(target)).status, 204);
+      assert.equal((await claim(target)).status, 404);
+    },
+  },
+  {
+    name: "a handover cancelled before it was claimed is never handed out",
+    run: async (target) => {
+      await register(target);
+      const { body } = await handOver(target);
+
+      await cancel(target, body.id);
+
+      assert.equal((await claim(target)).status, 204);
     },
   },
   {
@@ -195,11 +239,35 @@ export const scenarios: readonly Scenario[] = [
     },
   },
   {
+    name: "a result the server can't keep or show safely is refused",
+    run: async (target) => {
+      const { id, claimToken } = await claimed(target);
+      const link = (url: string) => ({ ...findings, links: [{ title: "Open", url }] });
+
+      const replies = [
+        await answer(target, id, claimToken, { ...findings, summary: "x".repeat(301) }),
+        await answer(target, id, claimToken, { ...findings, summary: "two\nlines" }),
+        await answer(target, id, claimToken, { ...findings, body: "a\u0000b" }),
+        await answer(target, id, claimToken, { ...findings, body: "x".repeat(65_537) }),
+        await answer(target, id, claimToken, link("https://user:secret@example.com/")),
+        await answer(target, id, claimToken, { outcome: "failed", error: " " }),
+        await progress(target, id, claimToken, "x".repeat(501)),
+      ];
+
+      assert.deepEqual(
+        replies.map((reply) => reply.status),
+        [400, 400, 400, 400, 400, 400, 400],
+      );
+      assert.equal(await stateOf(target, id), "running");
+    },
+  },
+  {
     name: "calls without the handover's claim token are refused",
     run: async (target) => {
       const { id } = await claimed(target);
 
       assert.equal((await progress(target, id, "not-the-token")).status, 403);
+      assert.equal((await progress(target, id, "")).status, 403);
       assert.equal((await answer(target, id, "not-the-token", findings)).status, 403);
       assert.equal((await progress(target, id + 100, "not-the-token")).status, 404);
       assert.equal(await stateOf(target, id), "running");
@@ -219,66 +287,5 @@ export const scenarios: readonly Scenario[] = [
       assert.equal((await cancel(target, id)).status, 409);
     },
   },
-  {
-    name: "a handover whose lease runs out fails as handler lost",
-    run: async (target) => {
-      const { id, claimToken } = await claimed(target);
-
-      await target.advance(120);
-
-      const { body } = await read(target, id);
-      assert.equal(body.state, "failed");
-      assert.match(body.error ?? "", /handler lost/);
-      assert.equal((await progress(target, id, claimToken)).body.state, "failed");
-      assert.equal((await answer(target, id, claimToken, findings)).status, 409);
-    },
-  },
-  {
-    name: "a handover past its action's timeout is timed out, whatever its lease",
-    run: async (target) => {
-      const { id, claimToken } = await claimed(target);
-      for (let minute = 0; minute < 10; minute++) {
-        await target.advance(60);
-        await progress(target, id, claimToken);
-      }
-
-      assert.equal(await stateOf(target, id), "timed_out");
-    },
-  },
-  {
-    name: "a handover nobody claims for 10 minutes expires and can't be claimed",
-    run: async (target) => {
-      await register(target);
-      const { body } = await handOver(target);
-
-      await target.advance(600);
-
-      assert.equal(await stateOf(target, body.id), "expired");
-      assert.equal((await claim(target)).status, 204);
-    },
-  },
-  {
-    name: "a handler that stopped calling isn't handed anything until it calls again",
-    run: async (target) => {
-      await register(target);
-      await target.advance(90);
-
-      assert.equal((await handOver(target)).status, 409);
-      await claim(target);
-      assert.equal((await handOver(target)).status, 201);
-    },
-  },
-  {
-    name: "a handler holding a running handover counts as connected",
-    run: async (target) => {
-      const { id, claimToken } = await claimed(target);
-      await target.advance(100);
-      await progress(target, id, claimToken);
-      await target.advance(100);
-
-      const { body } = await detail(target);
-
-      assert.equal(body.actions[0]?.available, true);
-    },
-  },
+  ...clockScenarios,
 ];
