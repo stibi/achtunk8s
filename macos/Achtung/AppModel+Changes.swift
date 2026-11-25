@@ -14,8 +14,9 @@ extension AppModel {
         // A handover this Mac asked for ended (ADR 0022): tell this Mac, and no other.
         inbox.handoverWatch.onEnded = { [weak self, weak inbox] handover, alertTitle in
             guard let self, let inbox, inbox === self.inbox else { return }
+            // Like an alert's notification: not while notifications are off or paused.
             let defaults = UserDefaults.standard
-            guard defaults.object(forKey: NotificationSetting.enabledKey) as? Bool ?? true,
+            guard NotificationSetting.isOn(in: defaults, at: .now),
                 defaults.object(forKey: NotificationSetting.handoversKey) as? Bool ?? true
             else { return }
             notifier.post(ended: handover, alertTitle: alertTitle, server: inbox.baseURL)

@@ -793,6 +793,16 @@ on a Mac and seen working in demo mode. Differences from the plan:
   dialogs on the Mac that built it covered the window. The website has no section for
   it yet for that reason; the README describes it.
 - The `AchtungAPI` fixtures now cover actions and handovers.
+- A result's body is shown with inline Markdown only (bold, code, links): headings and
+  lists appear as the handler wrote them, `##` and `-` included. Safe and plain; a
+  renderer for blocks is a later nicety. There is no Copy button on the card; its text can
+  be selected.
+- `handoverText`, which decides what of a handler's Markdown becomes a link, has no test:
+  the app target has no test bundle, only the packages do, and it needs Foundation's
+  Markdown parser. Its rules were checked by hand in demo mode. Text from a handler loses
+  bidirectional control characters in the mapping, which is tested.
+- Lookalike hostnames in a link can't be told apart by the app; the card shows each
+  link's host, and the rest is the reader's eye.
 
 **Phase 6, `handlers/llm-analysis`: built** (2026-11-25), with its container image and
 an example manifest. Tested against the SDK's fake server and a fake model API. Open:

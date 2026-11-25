@@ -137,7 +137,7 @@ final class InboxModel {
         }
         do throws(ServerError) {
             let loaded = try await server.occurrence(id: occurrence.id)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, isStillWanted(loaded) else { return }
             detail = loaded
             detailProblem = nil
         } catch {

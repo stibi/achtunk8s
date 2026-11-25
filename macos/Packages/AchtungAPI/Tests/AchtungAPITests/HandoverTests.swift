@@ -146,10 +146,33 @@ private let investigate = ActionOffer(
     ("handover-running-unclaimed", "Handover 6 is running without claimedAt"),
     ("handover-succeeded-no-summary", "Handover 7 is succeeded without summary"),
     ("handover-script-link", "A handover's link is not a web URL: javascript:alert(1)"),
+    ("handover-link-no-host", "A handover's link is not a web URL: https:///path"),
+    ("handover-requested-claimed", "Handover 8 is requested but claimed or ended"),
+    ("handover-running-ended", "Handover 9 is running but ended"),
+    ("handover-running-no-deadline", "Handover 10 is running without deadlineAt"),
+    ("handover-failed-no-error", "Handover 11 is failed without error"),
+    ("handover-expired-claimed", "Handover 12 is expired but claimed"),
 ])
 func aHandoverItsStateDoesntAllowIsAnInvalidResponse(fixture: String, message: String) async {
     await #expect(throws: ServerError.invalidResponse(message)) {
         try await server(["/api/handovers/5": .init(status: 200, fixture: fixture)])
             .handover(id: 5)
     }
+}
+
+/// Bidirectional controls could make a title or a link's target read as something else.
+@Test func textFromAHandlerLosesTheCharactersThatReorderIt() async throws {
+    let handover = try await server([
+        "/api/handovers/14": .init(status: 200, fixture: "handover-bidi")
+    ]).handover(id: 14)
+
+    guard case .succeeded(_, _, let result) = handover.state else {
+        Issue.record("not succeeded")
+        return
+    }
+    #expect(result.summary == "Safe txet")
+    #expect(result.body == "see this")
+    #expect(result.links.map(\.title) == ["Dashboard"])
+    #expect(handover.title == "Look")
+    #expect(handover.progress.map(\.message) == ["step one"])
 }

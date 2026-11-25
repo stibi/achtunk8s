@@ -60,7 +60,8 @@ struct HandoverCard: View {
                         Button {
                             openURL(link.url)
                         } label: {
-                            Label(link.title, systemImage: "link")
+                            // With where it goes: the title is the handler's word for it.
+                            Label(titled(link), systemImage: "link")
                         }
                         .buttonStyle(.bordered)
                         .help(link.url.absoluteString)
@@ -76,13 +77,20 @@ struct HandoverCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(handover.progress, id: \.self) { line in
                         let time = line.reportedAt.formatted(date: .omitted, time: .standard)
-                        Text("\(time)  \(line.message)")
+                        // Verbatim: a handler's line is text, never Markdown.
+                        Text(verbatim: "\(time)  \(line.message)")
                     }
                 }
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    /// A link's title with where it goes: the title is the handler's word for it. A string,
+    /// so it is shown as it is and not read as Markdown.
+    private func titled(_ link: Handover.Link) -> String {
+        "\(link.title) (\(link.url.host() ?? "?"))"
     }
 
     private var symbol: String {

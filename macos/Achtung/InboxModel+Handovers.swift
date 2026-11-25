@@ -39,11 +39,13 @@ extension InboxModel {
     /// Cancels a handover that is requested or running. Returns why it failed.
     func cancel(_ handover: Handover) async -> ServerError? {
         var problem: ServerError?
+        // Cancelled here: nothing to be told about, also when the stream is faster than
+        // the answer.
+        let watched = handoverWatch.pending.removeValue(forKey: handover.id)
         do throws(ServerError) {
             _ = try await server.cancelHandover(id: handover.id)
-            // Cancelled here: nothing to be told about.
-            handoverWatch.pending[handover.id] = nil
         } catch {
+            handoverWatch.pending[handover.id] = watched
             problem = error
         }
         await reloadDetail(ofOccurrence: handover.occurrenceID)
@@ -63,13 +65,25 @@ extension InboxModel {
             await reloadDetail(ofOccurrence: shown.id)
         }
         for (id, title) in handoverWatch.pending {
-            // One that can't be read now is asked for again next time.
-            guard let handover = try? await server.handover(id: id), !handover.isActive else {
-                continue
+            do throws(ServerError) {
+                let handover = try await server.handover(id: id)
+                // Another run of this may have told of it while this one waited.
+                guard !handover.isActive, handoverWatch.pending.removeValue(forKey: id) != nil
+                else { continue }
+                handoverWatch.onEnded(handover, title)
+            } catch .notFound {
+                // The server no longer has it: nothing will ever come of asking.
+                handoverWatch.pending[id] = nil
+            } catch {
+                // One that can't be read now is asked for again next time.
             }
-            handoverWatch.pending[id] = nil
-            handoverWatch.onEnded(handover, title)
         }
+    }
+
+    /// Whether a detail that just loaded may be shown: not when another alert's is, which
+    /// a reload asked for in the background would otherwise overwrite once the user moved on.
+    func isStillWanted(_ loaded: OccurrenceDetail) -> Bool {
+        detail.map { $0.occurrence.id == loaded.occurrence.id } ?? true
     }
 
     /// Reads the open detail again, if it is still this occurrence's.
