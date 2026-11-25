@@ -330,6 +330,22 @@ An alert can be handed over to a plugin, e.g. to have an agent investigate it
   server's tests run those scenarios against the real server
   (`test/http/handover-conformance.test.ts`), and the SDK's run them against the fake, so
   the two can't drift apart unnoticed. The SDK's types are written by hand from the spec.
+- **The macOS client** shows them in the detail pane only (`HandoverSection`, under the
+  alert's buttons): a button per action the detail lists, off with the reason when its
+  handler isn't connected or is working on this alert already; a `HandoverCard` for the
+  newest handover of each action (`OccurrenceDetail.latestHandovers`), with a spinner, the
+  handler's progress lines and Cancel while it is requested or running, and the result
+  once it ended; the earlier ones folded under "Earlier handovers".
+  `Handover.State` in AchtungDomain is an enum with exactly the facts each state has;
+  `HandoverMapping.swift` rejects a combination the states don't allow, and a link that
+  isn't http or https. `handoverText` renders the body: inline Markdown only, an image as
+  its alt text, a link kept only when it is http or https, with its target spelled out
+  when its text doesn't say. The detail is read again on `changed: handovers`
+  (`InboxModel.handoversChanged`), and with each refresh while a handover on screen or one
+  of this Mac's is still active, so it also works without the stream.
+  `HandoverWatch` remembers, in memory, the handovers this Mac asked for; when one ends,
+  this Mac gets a notification ("… finished: …", Settings › Notifications), and no other
+  Mac does. Demo mode has two made-up plugins (`demo-server.py`).
 - A result is untrusted text from another program. Links must be `http` or `https`
   (checked on the way in); clients render the body as text and load nothing from it.
 

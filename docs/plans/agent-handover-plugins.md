@@ -1,7 +1,7 @@
 # Plan: hand an alert over to a plugin (handlers, actions, handovers)
 
-Status: **agreed 2026-11-15; phases 2 (the server) and 3 (the SDK) are built**, the
-others are in progress or not started. The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
+Status: **agreed 2026-11-15; phases 2 (the server), 3 (the SDK) and 4 (the macOS client)
+are built**, the others are in progress or not started. The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
 was built and where it differs from the sketch below: [Progress](#progress).
 It changes the public API and the schema, so each phase waits for the user's OK
 (AGENTS.md). Prerequisite: the change stream (ADR 0019) merged to `main`.
@@ -758,11 +758,10 @@ differ from the sketch in section 2, they are right. The differences:
   them polling.
 - A handler also counts as connected while it holds a running handover, since a lease
   (two minutes) is renewed less often than the 90 seconds.
-- The `AchtungAPI` fixtures were not extended with `actions` and `handovers` (they are
-  optional in the spec, and nothing could be run to check them). That moves to phase 4.
 - Opening an alert's detail now takes the handovers lock for a moment, because reads
   settle the clock. Fine at this size; the thing to revisit if detail reads get slow.
-- Not verified here: that the macOS packages still build against the new spec (no
+- Since verified on a Mac (phase 4): the macOS packages build against the new spec.
+- Was not verified when phase 2 was built: that the macOS packages still build against the new spec (no
   Swift on the machine this was built on). The Swift client generates only the
   `client` tag, so the handler routes don't reach it; the new client routes and the
   `handovers` change kind do.
@@ -781,6 +780,19 @@ differ from the sketch in section 2, they are right. The differences:
   scenarios cover the same calls.
 - The SDK also cleans and cuts a result to the server's limits (one-line summary, 64 KiB
   body, no NUL characters), so an agent's output isn't lost to a 400.
+
+**Phase 4, the macOS client: built** (2026-11-25), checked with `macos/scripts/check.sh`
+on a Mac and seen working in demo mode. Differences from the plan:
+
+- The action buttons are in the detail pane only, in a row of their own under the
+  alert's buttons, not also in a list row's context menu, and there is no "Hand Over"
+  menu for more than two: each action is a button.
+- The handovers this Mac asked for are remembered in memory only, so a handover that ends
+  after the app was quit isn't announced; the alert still shows it.
+- The screenshots for it are listed in `docs/media/SHOTLIST.md` as missing: system
+  dialogs on the Mac that built it covered the window. The website has no section for
+  it yet for that reason; the README describes it.
+- The `AchtungAPI` fixtures now cover actions and handovers.
 
 Phase 1 (the spike on the VM) was not done first: it needs the agent's own read-only
 credentials (decision 8). It is still due before phase 5.

@@ -63,6 +63,7 @@ struct InboxView: View {
                 focusRequests: searchFocusRequests)
         )
         .environment(\.reminders, reminderActions)
+        .environment(\.handovers, HandoverActions(model))
         .modifier(CommandPaletteHost { paletteCommands })
         // A channel that moved to another instance (ADR 0006) has a new identity; leave the
         // old one for Live rather than asking the server for it every refresh.

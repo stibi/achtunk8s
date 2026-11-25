@@ -1,0 +1,243 @@
+{
+  "occurrence": {
+    "id": 9,
+    "instance": "onprem",
+    "channel": "legal-machine-prod",
+    "source": "alertmanager",
+    "sourceKey": "c0ffee0000000004",
+    "status": "firing",
+    "severity": "critical",
+    "title": "HighErrorRate",
+    "summary": "5xx rate above 5% for 10 minutes.",
+    "labels": {
+      "severity": "critical",
+      "alertname": "HighErrorRate",
+      "namespace": "example-prod"
+    },
+    "annotations": {
+      "summary": "5xx rate above 5% for 10 minutes."
+    },
+    "links": [
+      {
+        "kind": "source",
+        "url": "https://prometheus.example.com/graph"
+      }
+    ],
+    "startsAt": "2026-11-07T19:00:00.000Z",
+    "endsAt": null,
+    "firstReceivedAt": "2026-11-07T21:14:19.643Z",
+    "lastReceivedAt": "2026-11-07T21:14:19.643Z",
+    "lastEventAt": "2026-11-07T21:14:19.643Z",
+    "lastEventKind": "fired",
+    "notificationCount": 1,
+    "silencedUntil": null
+  },
+  "events": [
+    {
+      "id": 9,
+      "kind": "fired",
+      "cause": null,
+      "recordedAt": "2026-11-07T21:14:19.643Z"
+    }
+  ],
+  "otherOccurrences": [
+    {
+      "id": 7,
+      "instance": "onprem",
+      "channel": "legal-machine-prod",
+      "source": "alertmanager",
+      "sourceKey": "c0ffee0000000004",
+      "status": "resolved",
+      "severity": "critical",
+      "title": "HighErrorRate",
+      "summary": "5xx rate above 5% for 10 minutes.",
+      "labels": {
+        "severity": "critical",
+        "alertname": "HighErrorRate",
+        "namespace": "example-prod"
+      },
+      "annotations": {
+        "summary": "5xx rate above 5% for 10 minutes."
+      },
+      "links": [
+        {
+          "kind": "source",
+          "url": "https://prometheus.example.com/graph"
+        }
+      ],
+      "startsAt": "2026-11-07T18:00:00.000Z",
+      "endsAt": "2026-11-07T18:20:00.000Z",
+      "firstReceivedAt": "2026-11-07T21:14:19.586Z",
+      "lastReceivedAt": "2026-11-07T21:14:19.610Z",
+      "lastEventAt": "2026-11-07T21:14:19.610Z",
+      "lastEventKind": "resolved",
+      "notificationCount": 2,
+      "silencedUntil": null
+    }
+  ],
+  "actions": [
+    {
+      "handler": "herdr-agent",
+      "handlerName": "herdr agent",
+      "action": "investigate",
+      "title": "Investigate with Agent",
+      "description": "Starts an agent, read-only.",
+      "available": true,
+      "lastSeenAt": "2026-11-15T10:00:10.000Z"
+    },
+    {
+      "handler": "llm",
+      "handlerName": "LLM analysis",
+      "action": "explain",
+      "title": "Explain",
+      "description": "",
+      "available": false,
+      "lastSeenAt": "2026-11-15T08:30:00.000Z"
+    }
+  ],
+  "handovers": [
+    {
+      "id": 4,
+      "occurrenceId": 9,
+      "handler": "herdr-agent",
+      "handlerName": "herdr agent",
+      "handlerVersion": "0.1.0",
+      "action": "investigate",
+      "title": "Investigate with Agent",
+      "state": "running",
+      "requestedAt": "2026-11-15T10:00:00.000Z",
+      "claimedAt": "2026-11-15T10:00:02.000Z",
+      "deadlineAt": "2026-11-15T10:20:02.000Z",
+      "finishedAt": null,
+      "summary": null,
+      "body": null,
+      "links": [],
+      "error": null,
+      "progress": [
+        {
+          "at": "2026-11-15T10:00:05.000Z",
+          "message": "agent inv-4 started"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "occurrenceId": 9,
+      "handler": "herdr-agent",
+      "handlerName": "herdr agent",
+      "handlerVersion": "0.1.0",
+      "action": "investigate",
+      "title": "Investigate with Agent",
+      "state": "succeeded",
+      "requestedAt": "2026-11-15T09:00:00.000Z",
+      "claimedAt": "2026-11-15T09:00:03.000Z",
+      "deadlineAt": null,
+      "finishedAt": "2026-11-15T09:07:00.000Z",
+      "summary": "The api container is out of memory",
+      "body": "## Findings\n\nOOM-killed four times.",
+      "links": [
+        {
+          "title": "Memory dashboard",
+          "url": "https://grafana.example.com/d/memory"
+        }
+      ],
+      "error": null,
+      "progress": []
+    },
+    {
+      "id": 2,
+      "occurrenceId": 9,
+      "handler": "llm",
+      "handlerName": "LLM analysis",
+      "handlerVersion": "0.1.0",
+      "action": "explain",
+      "title": "Explain",
+      "state": "failed",
+      "requestedAt": "2026-11-15T08:00:00.000Z",
+      "claimedAt": "2026-11-15T08:00:01.000Z",
+      "deadlineAt": null,
+      "finishedAt": "2026-11-15T08:00:09.000Z",
+      "summary": null,
+      "body": null,
+      "links": [],
+      "error": "The model didn't answer",
+      "progress": []
+    },
+    {
+      "id": 1,
+      "occurrenceId": 9,
+      "handler": "herdr-agent",
+      "handlerName": "herdr agent",
+      "handlerVersion": "0.1.0",
+      "action": "investigate",
+      "title": "Investigate with Agent",
+      "state": "cancelled",
+      "requestedAt": "2026-11-15T07:00:00.000Z",
+      "claimedAt": null,
+      "deadlineAt": null,
+      "finishedAt": "2026-11-15T07:00:30.000Z",
+      "summary": null,
+      "body": null,
+      "links": [],
+      "error": null,
+      "progress": []
+    },
+    {
+      "id": 10,
+      "occurrenceId": 9,
+      "handler": "herdr-agent",
+      "handlerName": "herdr agent",
+      "handlerVersion": "0.1.0",
+      "action": "slow",
+      "title": "Investigate with Agent",
+      "state": "timed_out",
+      "requestedAt": "2026-11-15T06:00:00.000Z",
+      "claimedAt": "2026-11-15T06:00:01.000Z",
+      "deadlineAt": null,
+      "finishedAt": "2026-11-15T06:15:01.000Z",
+      "summary": null,
+      "body": null,
+      "links": [],
+      "error": null,
+      "progress": []
+    },
+    {
+      "id": 11,
+      "occurrenceId": 9,
+      "handler": "herdr-agent",
+      "handlerName": "herdr agent",
+      "handlerVersion": "0.1.0",
+      "action": "nobody",
+      "title": "Investigate with Agent",
+      "state": "expired",
+      "requestedAt": "2026-11-15T05:00:00.000Z",
+      "claimedAt": null,
+      "deadlineAt": null,
+      "finishedAt": "2026-11-15T05:10:00.000Z",
+      "summary": null,
+      "body": null,
+      "links": [],
+      "error": null,
+      "progress": []
+    },
+    {
+      "id": 12,
+      "occurrenceId": 9,
+      "handler": "herdr-agent",
+      "handlerName": "herdr agent",
+      "handlerVersion": "0.1.0",
+      "action": "waiting",
+      "title": "Investigate with Agent",
+      "state": "requested",
+      "requestedAt": "2026-11-15T10:00:00.000Z",
+      "claimedAt": null,
+      "deadlineAt": null,
+      "finishedAt": null,
+      "summary": null,
+      "body": null,
+      "links": [],
+      "error": null,
+      "progress": []
+    }
+  ]
+}

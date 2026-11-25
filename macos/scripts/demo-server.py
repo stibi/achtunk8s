@@ -19,6 +19,12 @@ For trying notifications, three endpoints outside the API make things happen now
   curl -X POST 'http://127.0.0.1:8790/demo/fire?count=1'   # new critical alerts
   curl -X POST http://127.0.0.1:8790/demo/resend           # resend the newest firing one
   curl -X POST http://127.0.0.1:8790/demo/remind           # every pending reminder comes due
+  curl -X POST http://127.0.0.1:8790/demo/handover-fail    # the next handover fails
+
+Handovers (ADR 0022): every alert offers "Investigate with Agent", a made-up plugin that
+takes the handover after 2 seconds, reports progress and answers after 9 with made-up
+findings, and "Explain with a Model", whose plugin isn't connected. The first alert has a
+handover that ended before the start. The change stream announces handovers moving on.
 
 The change stream (GET /api/events, ADR 0019) announces both, the occurrences changing as
 time goes by (the scenario's events, resends, repeats), silences set or ended, and edits to
@@ -413,10 +419,124 @@ def detail(occurrence_id, now):
         "events": history,
         "otherOccurrences": others[:20],
         "metricPanels": ["pod-cpu"] if cpu_shape(described) else [],
-        # No handler is connected in demo mode yet (ADR 0022).
-        "actions": [],
-        "handovers": [],
+        "actions": [action_offer(plugin, now) for plugin in PLUGINS],
+        "handovers": [
+            handover_view(handover, now) for handover in reversed(HANDOVERS)
+            if handover["occurrenceId"] == occurrence_id
+        ],
     }
+
+
+# Handovers (ADR 0022): two made-up plugins. "Investigate with Agent" takes a handover
+# after 2 seconds, reports progress and answers after 9; "Explain with a Model" isn't
+# connected, so its button is off. One handover of the first alert ended before the start.
+PLUGINS = [
+    {"handler": "demo-agent", "handlerName": "Demo agent", "handlerVersion": "0.1.0",
+     "action": "investigate", "title": "Investigate with Agent", "connected": True,
+     "description": "Starts an agent that looks into the alert, read-only, and reports back."},
+    {"handler": "demo-model", "handlerName": "Demo model", "handlerVersion": "0.3.0",
+     "action": "explain", "title": "Explain with a Model", "connected": False,
+     "description": "Asks a language model what the alert means and where to look."},
+]
+PROGRESS = [(2, "agent demo-1 started"), (4, "reading the pod's logs"),
+            (7, "comparing with the last deploy")]
+FINDINGS = """## What I found
+
+The pod was **OOM-killed** four times in the last hour: its memory climbs to the limit \
+within minutes of each start.
+
+- The limit is 512 MiB; the last deploy raised the worker pool from 4 to 16.
+- Nothing else in the namespace is affected.
+
+## Where to look
+
+Roll back the pool size, or raise the limit: see [the deploy](https://deploys.example.com/1842).
+"""
+# As asked for; the state is made from the time since (handover_view).
+HANDOVERS = [{"id": 1, "occurrenceId": 1, "plugin": PLUGINS[0], "cancelledAt": None,
+              "requestedAt": START - datetime.timedelta(minutes=25), "fails": False}]
+FAIL_NEXT = [False]  # POST /demo/handover-fail: the next handover fails
+
+
+def action_offer(plugin, now):
+    seen = now if plugin["connected"] else START - datetime.timedelta(hours=3)
+    return {
+        "handler": plugin["handler"], "handlerName": plugin["handlerName"],
+        "action": plugin["action"], "title": plugin["title"],
+        "description": plugin["description"], "available": plugin["connected"],
+        "lastSeenAt": iso(seen),
+    }
+
+
+def handover_view(handover, now):
+    """The handover as the API has it, its state made from how long ago it was asked for."""
+    plugin, asked = handover["plugin"], handover["requestedAt"]
+    age = (now - asked).total_seconds()
+    claimed = asked + datetime.timedelta(seconds=2)
+    finished = asked + datetime.timedelta(seconds=9)
+    cancelled = handover["cancelledAt"]
+    ends = cancelled or finished
+    seen = (ends - asked).total_seconds() if now >= ends else age
+    view = {
+        "id": handover["id"], "occurrenceId": handover["occurrenceId"],
+        "handler": plugin["handler"], "handlerName": plugin["handlerName"],
+        "handlerVersion": plugin["handlerVersion"], "action": plugin["action"],
+        "title": plugin["title"], "state": "requested", "requestedAt": iso(asked),
+        "claimedAt": iso(claimed) if seen >= 2 else None, "deadlineAt": None,
+        "finishedAt": None, "summary": None, "body": None, "links": [], "error": None,
+        "progress": [{"at": iso(asked + datetime.timedelta(seconds=after)), "message": message}
+                     for after, message in PROGRESS if after <= seen],
+    }
+    if cancelled and now >= cancelled:
+        view.update(state="cancelled", finishedAt=iso(cancelled))
+    elif age >= 9 and handover["fails"]:
+        view.update(state="failed", finishedAt=iso(finished),
+                    error="The agent wrote no findings before it stopped")
+    elif age >= 9:
+        view.update(
+            state="succeeded", finishedAt=iso(finished),
+            summary="The pod runs out of memory since the last deploy", body=FINDINGS,
+            links=[{"title": "Memory dashboard", "url": "https://grafana.example.com/d/memory"}])
+    elif age >= 2:
+        view.update(state="running", deadlineAt=iso(claimed + datetime.timedelta(minutes=10)))
+    return view
+
+
+def hand_over(occurrence_id, body, now):
+    if not 1 <= occurrence_id <= len(SCENARIO):
+        return 404, {"error": "Occurrence not found"}
+    plugin = next((p for p in PLUGINS
+                   if (p["handler"], p["action"]) == (body.get("handler"), body.get("action"))), None)
+    if plugin is None:
+        return 409, {"error": "No handler offers this action"}
+    for handover in HANDOVERS:
+        view = handover_view(handover, now)
+        if (handover["occurrenceId"], handover["plugin"]) == (occurrence_id, plugin) \
+                and view["state"] in ("requested", "running"):
+            return 200, view
+    if not plugin["connected"]:
+        return 409, {"error": f"{plugin['handlerName']} isn't connected"}
+    handover = {"id": len(HANDOVERS) + 1, "occurrenceId": occurrence_id, "plugin": plugin,
+                "requestedAt": now, "cancelledAt": None, "fails": FAIL_NEXT[0]}
+    FAIL_NEXT[0] = False
+    HANDOVERS.append(handover)
+    return 201, handover_view(handover, now)
+
+
+def cancel_handover(handover_id, now):
+    if not 1 <= handover_id <= len(HANDOVERS):
+        return 404, {"error": "Handover not found"}
+    handover = HANDOVERS[handover_id - 1]
+    state = handover_view(handover, now)["state"]
+    if state not in ("requested", "running"):
+        return 409, {"error": f"The handover is {state} already"}
+    handover["cancelledAt"] = now
+    return 200, handover_view(handover, now)
+
+
+def fail_next_handover():
+    FAIL_NEXT[0] = True
+    return 200, {"next": "fails"}
 
 
 IGNORED = ["InfoInhibitor", "Watchdog"]  # the ignored alert names (Settings)
@@ -704,6 +824,10 @@ def get(path, query, now):
         if not found["metricPanels"]:
             return 404, {"error": "The occurrence has no such graph"}
         return 200, cpu_graph(found["occurrence"], now)
+    if match := re.fullmatch(r"/api/handovers/(\d+)", path):
+        if not 1 <= int(match.group(1)) <= len(HANDOVERS):
+            return 404, {"error": "Handover not found"}
+        return 200, handover_view(HANDOVERS[int(match.group(1)) - 1], now)
     if match := re.fullmatch(r"/api/occurrences/(\d+)", path):
         found = detail(int(match.group(1)), now)
         return (200, found) if found else (404, {"error": "Occurrence not found"})
@@ -930,6 +1054,22 @@ def announce_occurrences():
             publish("occurrences")
 
 
+def announce_handovers():
+    """Announces the handovers moving on as time goes by, as a handler's calls would."""
+    def state():
+        now = datetime.datetime.now(datetime.timezone.utc)
+        return [(view["state"], len(view["progress"]))
+                for view in (handover_view(handover, now) for handover in HANDOVERS)]
+
+    last = state()
+    while True:
+        time.sleep(0.5)
+        current = state()
+        if current != last:
+            last = current
+            publish("handovers")
+
+
 class DemoAPI(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802 (http.server's naming)
         url = urlparse(self.path)
@@ -975,6 +1115,12 @@ class DemoAPI(BaseHTTPRequestHandler):
             self.reply(*resend(now), announce="occurrences")
         elif url.path == "/demo/remind":
             self.reply(*remind_now(now), announce="occurrences")
+        elif url.path == "/demo/handover-fail":
+            self.reply(*fail_next_handover())
+        elif created := re.fullmatch(r"/api/occurrences/(\d+)/handovers", url.path):
+            self.reply(*hand_over(int(created.group(1)), body, now), announce="handovers")
+        elif cancelled := re.fullmatch(r"/api/handovers/(\d+)/cancel", url.path):
+            self.reply(*cancel_handover(int(cancelled.group(1)), now), announce="handovers")
         elif bulk := re.fullmatch(r"/api/alertmanagers/([^/]+)/silences", url.path):
             self.reply(*silence_alerts(bulk.group(1), body, now), announce="silences")
         elif match:
@@ -1024,4 +1170,5 @@ class DemoAPI(BaseHTTPRequestHandler):
 
 
 threading.Thread(target=announce_occurrences, daemon=True).start()
+threading.Thread(target=announce_handovers, daemon=True).start()
 ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1]) if len(sys.argv) > 1 else 8790), DemoAPI).serve_forever()

@@ -9,6 +9,9 @@ public enum ServerChange: String, Sendable, Hashable, CaseIterable {
     case silences
     /// The shared settings, e.g. the ignored alert names (ADR 0011).
     case settings
+    /// A handover was asked for or moved on, or the actions offered for alerts changed
+    /// (ADR 0022).
+    case handovers
 }
 
 /// When to reconnect the change stream, and how often to poll beside it (ADR 0019).

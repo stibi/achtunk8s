@@ -41,6 +41,7 @@ final class InboxModel {
     private var loadingOlder: Set<OccurrenceScope> = []
     /// Internal for the extensions in `InboxModel+Alerts.swift`.
     let server: AchtungServer
+    let handoverWatch = HandoverWatch()
     private let defaults: UserDefaults
     private let readStateKey: String
 
