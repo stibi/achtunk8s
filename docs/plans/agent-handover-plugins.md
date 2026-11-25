@@ -1,8 +1,8 @@
 # Plan: hand an alert over to a plugin (handlers, actions, handovers)
 
-Status: **agreed, not started** (written and agreed 2026-11-15; the decisions are in
-section 9). Decisions: ADR 0022 and ADR 0023 (both proposed until the user accepts the
-text).
+Status: **agreed 2026-11-15; phase 2 (the server) is built**, the other phases are not
+started. The decisions are in section 9 and in ADR 0022 and ADR 0023 (accepted). What
+was built and where it differs from the sketch below: [Progress](#progress).
 It changes the public API and the schema, so each phase waits for the user's OK
 (AGENTS.md). Prerequisite: the change stream (ADR 0019) merged to `main`.
 
@@ -734,6 +734,41 @@ herdr, and the exact restricted agent profile (phase 1); the npm scope and the
 publishing workflow (phase 7).
 
 ---
+
+## Progress
+
+**Phase 2, the server: built** (2026-11-15). The protocol as built is described in
+[`docs/handover-protocol.md`](../handover-protocol.md) and `api/openapi.yaml`; where they
+differ from the sketch in section 2, they are right. The differences:
+
+- The handlers' table is `alert_handlers`, not `handover_handlers`.
+- `Handover` in the API is one flat shape with nullable fields (`claimedAt`,
+  `deadlineAt`, `finishedAt`, `summary`, `body`, `error`), as `Occurrence` does with
+  `endsAt`; the union by state is in the server's domain and will be in the client's.
+- Registering the 51st handler is a 409.
+- Reads settle the clock too, so a `GET` never shows a handover the clock has ended as
+  still running.
+- A claim reads the occurrence before it takes the handover, and takes it only if it is
+  still requested.
+- The protocol page already has the `curl` handler; it was run by hand against a real
+  server. Running it in CI is still phase 3.
+- The branch was rebased onto `main` on 2026-11-25, which has the change stream
+  (ADR 0019); the migration is `0009_handovers`.
+- Up to 100 claims may wait at once, not 20: with 50 handlers, 20 would leave most of
+  them polling.
+- A handler also counts as connected while it holds a running handover, since a lease
+  (two minutes) is renewed less often than the 90 seconds.
+- The `AchtungAPI` fixtures were not extended with `actions` and `handovers` (they are
+  optional in the spec, and nothing could be run to check them). That moves to phase 4.
+- Opening an alert's detail now takes the handovers lock for a moment, because reads
+  settle the clock. Fine at this size; the thing to revisit if detail reads get slow.
+- Not verified here: that the macOS packages still build against the new spec (no
+  Swift on the machine this was built on). The Swift client generates only the
+  `client` tag, so the handler routes don't reach it; the new client routes and the
+  `handovers` change kind do.
+
+Phase 1 (the spike on the VM) was not done first: it needs the agent's own read-only
+credentials (decision 8). It is still due before phase 5.
 
 ## What stays from the earlier plan
 

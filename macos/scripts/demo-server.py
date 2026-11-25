@@ -408,8 +408,15 @@ def detail(occurrence_id, now):
         for event_id, kind, time, remind_at in events(occurrence_id, now)
     ]
     others.sort(key=lambda o: o["startsAt"], reverse=True)
-    return {"occurrence": described, "events": history, "otherOccurrences": others[:20],
-            "metricPanels": ["pod-cpu"] if cpu_shape(described) else []}
+    return {
+        "occurrence": described,
+        "events": history,
+        "otherOccurrences": others[:20],
+        "metricPanels": ["pod-cpu"] if cpu_shape(described) else [],
+        # No handler is connected in demo mode yet (ADR 0022).
+        "actions": [],
+        "handovers": [],
+    }
 
 
 IGNORED = ["InfoInhibitor", "Watchdog"]  # the ignored alert names (Settings)

@@ -10,6 +10,7 @@ import type { Changes } from "../services/changes.ts";
 import type { SourceAdapter } from "../sources/source-adapter.ts";
 import { type Inbox, registerApiRoutes } from "./api.ts";
 import { type EventStreamOptions, registerEventRoutes } from "./events.ts";
+import { type HandlerApiOptions, registerHandlerRoutes } from "./handler-api.ts";
 import { registerHealthRoutes } from "./health.ts";
 import { type Ingest, registerIngestRoutes } from "./ingest.ts";
 import { openApiTransform, openApiTransformObject } from "./openapi.ts";
@@ -26,6 +27,8 @@ export interface AppOptions {
   readonly logStream?: { write(line: string): void };
   /** The change stream's timing and limit; its defaults otherwise. */
   readonly events?: EventStreamOptions;
+  /** The handler API's tokens (ADR 0023) and its claim waits; no tokens when absent. */
+  readonly handlers?: HandlerApiOptions;
 }
 
 export function buildApp(options: AppOptions): FastifyInstance {
@@ -53,7 +56,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
     openapi: {
       info: {
         title: "Achtung",
-        description: "Self-hosted alert inbox. No authentication: see ADR 0002.",
+        description:
+          "Self-hosted alert inbox. No authentication (ADR 0002), except that the handler API can require a token (ADR 0023).",
         version: "0.1.0",
       },
     },
@@ -67,6 +71,12 @@ export function buildApp(options: AppOptions): FastifyInstance {
     registerIngestRoutes(routes, options.sources, options.services.ingest);
     registerApiRoutes(routes, options.services);
     registerEventRoutes(routes, options.services.changes, options.events);
+    registerHandlerRoutes(
+      routes,
+      options.services.handovers,
+      options.services.changes,
+      options.handlers ?? { tokens: null },
+    );
   });
   return app;
 }

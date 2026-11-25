@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type { AlertLink } from "../domain/alert.ts";
 
@@ -162,3 +163,98 @@ export const ignoredAlertNames = pgTable("ignored_alert_names", {
   name: text().primaryKey(),
   createdAt: timestamptz().notNull(),
 });
+
+/**
+ * Plugins' processes as they registered themselves (ADR 0022). `actions` is what each
+ * offers, parsed on the way out.
+ */
+export const alertHandlers = pgTable("alert_handlers", {
+  id: text().primaryKey(),
+  name: text().notNull(),
+  version: text().notNull(),
+  actions: jsonb().notNull(),
+  registeredAt: timestamptz().notNull(),
+  // Its last register, claim or progress call: connected while this is recent.
+  lastSeenAt: timestamptz().notNull(),
+});
+
+export const handoverState = pgEnum("handover_state", [
+  "requested",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "timed_out",
+  "expired",
+]);
+
+/** One occurrence handed over to one action of one handler (ADR 0022). Never deleted. */
+export const handovers = pgTable(
+  "handovers",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    occurrenceId: bigint({ mode: "number" })
+      .notNull()
+      .references(() => occurrences.id),
+    // No reference: a handover outlives its handler's registration, so it carries the
+    // handler's name and version and the action's title itself.
+    handlerId: text().notNull(),
+    handlerName: text().notNull(),
+    handlerVersion: text().notNull(),
+    actionId: text().notNull(),
+    actionTitle: text().notNull(),
+    // The action's timeout when asked; the deadline is the claim plus this.
+    timeoutSeconds: integer().notNull(),
+    state: handoverState().notNull(),
+    requestedAt: timestamptz().notNull(),
+    claimedAt: timestamptz(),
+    leaseExpiresAt: timestamptz(),
+    deadlineAt: timestamptz(),
+    finishedAt: timestamptz(),
+    // What the claiming handler must send with its later calls. Never returned by a read.
+    claimToken: text(),
+    // What was handed over: the occurrence, its events and its other occurrences as they
+    // were at the claim.
+    snapshot: jsonb(),
+    summary: text(),
+    body: text(),
+    links: jsonb(),
+    error: text(),
+  },
+  (table) => [
+    index("handovers_occurrence_id").on(table.occurrenceId, table.id.desc()),
+    // At most one handover of an action is active for an occurrence; also finds the active.
+    uniqueIndex("handovers_one_active")
+      .on(table.occurrenceId, table.handlerId, table.actionId)
+      .where(sql`${table.state} in ('requested', 'running')`),
+    index("handovers_active")
+      .on(table.state)
+      .where(sql`${table.state} in ('requested', 'running')`),
+    check(
+      "handovers_finished_matches_state",
+      sql`(${table.state} in ('requested', 'running')) = (${table.finishedAt} is null)`,
+    ),
+    check(
+      "handovers_claimed_matches_state",
+      sql`${table.state} = 'cancelled' or (${table.state} in ('requested', 'expired')) = (${table.claimedAt} is null)`,
+    ),
+    check(
+      "handovers_running_has_lease",
+      sql`${table.state} <> 'running' or (${table.leaseExpiresAt} is not null and ${table.deadlineAt} is not null and ${table.claimToken} is not null)`,
+    ),
+  ],
+);
+
+/** What a handler reported while working on a handover, append-only. */
+export const handoverProgress = pgTable(
+  "handover_progress",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    handoverId: bigint({ mode: "number" })
+      .notNull()
+      .references(() => handovers.id),
+    message: text().notNull(),
+    recordedAt: timestamptz().notNull(),
+  },
+  (table) => [index("handover_progress_handover_id").on(table.handoverId, table.id)],
+);

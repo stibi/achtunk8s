@@ -360,6 +360,7 @@ docker run -p 8080:8080 \
 | `ALERTMANAGERS` | Optional JSON: instance name → `{ "url", "username", "password", "irmIntegrationId" }`. Enables silences and Home for that instance. Holds credentials, so set it from a secret. |
 | `IRM_API_URL`, `IRM_API_TOKEN` | Optional, together: the Grafana IRM heartbeat on Home tiles. |
 | `METRICS` | Optional JSON: instance name → `{ "url", "username", "password", "bearerToken", "headers", "matchers" }`, a Prometheus-compatible query API. Enables the CPU graph in an alert about a pod. Holds credentials, so set it from a secret. |
+| `HANDLER_TOKENS` | Optional JSON: handler id → token. The plugins that may take alerts handed over to them ([protocol](docs/handover-protocol.md)). Without it, any program that reaches the server may. Set it from a secret. |
 | `HOST`, `PORT`, `LOG_LEVEL` | Defaults `0.0.0.0`, `8080`. |
 
 `/healthz` and `/readyz` are the liveness and readiness probes.

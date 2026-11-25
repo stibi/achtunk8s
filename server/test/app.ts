@@ -4,6 +4,7 @@ import type { AlertmanagerEndpoint } from "../src/clients/alertmanager.ts";
 import type { IrmEndpoint } from "../src/clients/irm.ts";
 import { buildApp, type Services } from "../src/http/app.ts";
 import type { EventStreamOptions } from "../src/http/events.ts";
+import type { HandlerApiOptions } from "../src/http/handler-api.ts";
 import { changesFeed } from "../src/services/changes.ts";
 import { type AlertmanagerAlertsOptions, alertmanagerAlertsFrom } from "../src/services/home.ts";
 import { servicesFor } from "../src/services/index.ts";
@@ -19,6 +20,18 @@ const unused = () => Promise.reject(new Error("this test uses no services"));
 /** For tests that never reach a service (health checks, the OpenAPI document). */
 export const unusedServices: Services = {
   changes: changesFeed(),
+  handovers: {
+    of: unused,
+    create: unused,
+    cancel: unused,
+    get: unused,
+    list: unused,
+    register: unused,
+    remove: unused,
+    claim: unused,
+    progress: unused,
+    answer: unused,
+  },
   ingest: unused,
   listChannels: unused,
   listChannelOccurrences: unused,
@@ -55,6 +68,8 @@ export interface TestAppOptions {
   readonly metricsOptions?: MetricsOptions;
   /** The change stream's timing and limit. */
   readonly events?: EventStreamOptions;
+  /** The handler API's tokens and claim waits; no tokens by default. */
+  readonly handlers?: HandlerApiOptions;
   /** The clock of the services themselves, e.g. the home view's last 24 hours. */
   readonly now?: () => Date;
 }
@@ -62,7 +77,7 @@ export interface TestAppOptions {
 /** The real app on a fresh test database. */
 export async function appWithDatabase(options: TestAppOptions = {}): Promise<{
   app: FastifyInstance;
-  services: Services;
+  services: ReturnType<typeof servicesFor>;
   reconciler: Reconciler;
   /** The due-reminder sweep main.ts runs (ADR 0025), on the services' clock. */
   remindDue: () => Promise<number[]>;
@@ -97,6 +112,7 @@ export async function appWithDatabase(options: TestAppOptions = {}): Promise<{
     services,
     checkReady: async () => {},
     ...(options.events === undefined ? {} : { events: options.events }),
+    ...(options.handlers === undefined ? {} : { handlers: options.handlers }),
   });
   onTestFinished(() => app.close());
   return {

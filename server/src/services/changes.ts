@@ -1,10 +1,11 @@
 /**
  * What changed, so a client re-reads that part instead of waiting for its next poll
  * (ADR 0019): occurrences (a notification arrived, or one resolved as vanished), silences
- * set or ended through Achtung, or the shared settings. Silences changed in Alertmanager
- * itself aren't seen here; polling still finds those.
+ * set or ended through Achtung, the shared settings, or handovers and the handlers offering
+ * them (ADR 0022). Silences changed in Alertmanager itself aren't seen here; polling still
+ * finds those.
  */
-export type ChangeKind = "occurrences" | "silences" | "settings";
+export type ChangeKind = "occurrences" | "silences" | "settings" | "handovers";
 
 /** Telling subscribers what changed. In memory: every client of this process hears it. */
 export interface Changes {

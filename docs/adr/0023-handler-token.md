@@ -1,6 +1,6 @@
 # 0023: A token for handlers
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-15
 
 ## Context

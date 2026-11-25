@@ -1,6 +1,6 @@
 # 0022: Plugins are handlers that pull handovers over a public HTTP API
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-15
 
 ## Context
@@ -91,7 +91,7 @@ The plan with the details, the endpoint sketch and the phases:
 - A result is untrusted text shown inside an alert. The client must never load remote
   content from it, open a link in it that isn't `http(s)`, or treat it as Achtung's own
   statement.
-- The server grows three tables, a sweep that runs every minute, and up to 20 held
+- The server grows three tables, a sweep that runs every minute, and up to 100 held
   claim requests. No gateway or deployment change is needed for the server.
 - A public API is a promise. Until `v1` it can change freely; after it, the handover
   states and result outcomes are closed sets.

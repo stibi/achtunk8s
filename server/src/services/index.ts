@@ -1,6 +1,7 @@
 import type { Database } from "../db/client.ts";
 import { silenceAlertmanagerAlerts } from "./alertmanager-silences.ts";
 import type { ChangeKind, Changes } from "./changes.ts";
+import { handoverServicesFor } from "./handover-services.ts";
 import { type AlertmanagerAlerts, getHome, listAlertmanagerAlerts } from "./home.ts";
 import {
   getOccurrence,
@@ -40,6 +41,10 @@ export function servicesFor(
   };
   return {
     changes,
+    // Handing alerts over to plugins (ADR 0022). Each publishes its own changes.
+    handovers: handoverServicesFor(db, changes, now, (id) =>
+      getOccurrence(db, silences, metrics, id),
+    ),
     ingest: (notification: Parameters<typeof ingestNotification>[1]) =>
       changing("occurrences", ingestNotification(db, notification)),
     listChannels: () => listChannels(db),

@@ -8,13 +8,20 @@ import type { Api, Inbox } from "./api-contract.ts";
 import {
   channelListBody,
   errorBody,
-  occurrenceDetailBody,
+  occurrenceDetailFields,
   occurrencePageBody,
   severity,
   toChannelBody,
   toOccurrenceBody,
-  toOccurrenceDetailBody,
+  toOccurrenceDetailFields,
 } from "./api-schemas.ts";
+import {
+  actionOfferBody,
+  handoverBody,
+  toActionOfferBody,
+  toHandoverBody,
+} from "./handover-schemas.ts";
+import { registerHandoverRoutes } from "./handovers.ts";
 import { registerHomeRoutes } from "./home.ts";
 import { registerMetricsRoutes } from "./metrics.ts";
 import { registerReminderRoutes } from "./reminder.ts";
@@ -105,6 +112,30 @@ function filterFrom(query: z.output<typeof listQuery>): OccurrenceFilter | { err
 
 const invalidCursor = { error: "Invalid cursor" };
 
+const occurrenceDetailBody = z
+  .object({
+    ...occurrenceDetailFields,
+    metricPanels: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "The graphs GET /api/occurrences/{id}/metrics/{panel} has for it, e.g. pod-cpu (ADR 0026): " +
+          "none when its instance has no metrics backend or the alert names nothing a panel shows. " +
+          "A string, not an enum, so a client skips the panels it doesn't know. Always sent; " +
+          "absent from servers before graphs",
+      ),
+    // Optional until every client reads them; the server always sends both.
+    actions: z
+      .array(actionOfferBody)
+      .optional()
+      .describe("What handlers offer to do with this alert, each a button (ADR 0022)"),
+    handovers: z
+      .array(handoverBody)
+      .optional()
+      .describe("This occurrence's handovers, newest first, at most 20"),
+  })
+  .meta({ id: "OccurrenceDetail" });
+
 function toPageBody(page: OccurrencePage) {
   return {
     occurrences: page.occurrences.map(toOccurrenceBody),
@@ -127,6 +158,7 @@ export function registerApiRoutes(app: FastifyInstance, inbox: Inbox): void {
     registerMetricsRoutes(api, inbox);
     registerHomeRoutes(api, inbox);
     registerSettingsRoutes(api, inbox);
+    registerHandoverRoutes(api, inbox.handovers);
   });
 }
 
@@ -251,7 +283,13 @@ function registerOccurrenceRoutes(api: Api, inbox: Inbox): void {
       if (detail === null) {
         return reply.code(404).send(notFound("Occurrence"));
       }
-      return toOccurrenceDetailBody(detail);
+      const { actions, handovers } = await inbox.handovers.of(detail.occurrence);
+      return {
+        ...toOccurrenceDetailFields(detail),
+        metricPanels: [...detail.metricPanels],
+        actions: actions.map(toActionOfferBody),
+        handovers: handovers.map(toHandoverBody),
+      };
     },
   );
 }

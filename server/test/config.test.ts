@@ -13,6 +13,7 @@ describe("loadConfig", () => {
       alertmanagers: new Map(),
       irm: null,
       metrics: new Map(),
+      handlerTokens: null,
     });
   });
 
@@ -202,5 +203,38 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ DATABASE_URL: databaseUrl, METRICS: value })).toThrow(
       expect.not.objectContaining({ message: expect.stringContaining("s3cret") }),
     );
+  });
+
+  it("reads each handler's token", () => {
+    const config = loadConfig({
+      DATABASE_URL: databaseUrl,
+      HANDLER_TOKENS: JSON.stringify({
+        "herdr-agent": "an-example-token-1",
+        llm: "an-example-token-2",
+      }),
+    });
+
+    expect(config.handlerTokens).toEqual(
+      new Map([
+        ["herdr-agent", "an-example-token-1"],
+        ["llm", "an-example-token-2"],
+      ]),
+    );
+  });
+
+  it.each([
+    ["text that isn't JSON", "herdr-agent=token"],
+    ["a handler id that isn't one", JSON.stringify({ "Herdr Agent": "an-example-token-1" })],
+    ["a token under 16 characters", JSON.stringify({ "herdr-agent": "sh0rt-s3cret" })],
+    ["a token that isn't text", JSON.stringify({ "herdr-agent": 42 })],
+    [
+      "one token for two handlers",
+      JSON.stringify({ "herdr-agent": "sh4red-s3cret-token", llm: "sh4red-s3cret-token" }),
+    ],
+  ])("rejects handler tokens with %s, without quoting a token", (_, value) => {
+    const load = () => loadConfig({ DATABASE_URL: databaseUrl, HANDLER_TOKENS: value });
+
+    expect(load).toThrow(/HANDLER_TOKENS/);
+    expect(load).toThrow(expect.not.objectContaining({ message: expect.stringMatching(/s3cret/) }));
   });
 });
