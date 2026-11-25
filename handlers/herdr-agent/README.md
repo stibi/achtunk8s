@@ -3,7 +3,7 @@
 A plugin for [Achtung](../../README.md), written with the
 [handover SDK](../../sdk/typescript/README.md). It adds a button to every alert,
 "Investigate with Agent". Pressing it starts a coding agent (Claude Code by default) in a
-[herdr](https://herdr.dev) workspace of its own, on the machine this handler runs on. The
+herdr (a terminal multiplexer for coding agents) workspace of its own, on the machine this handler runs on. The
 agent reads the alert, looks into your systems, and writes down what it found; the
 findings then show in the alert, for everyone.
 
