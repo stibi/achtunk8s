@@ -10,7 +10,7 @@
     "check": "pnpm run astro check && pnpm run build && html-validate \"dist/**/*.html\" && linkinator dist --recurse --check-fragments --skip \"^https?://(?!127\\.0\\.0\\.1|localhost)\""
   },
   "dependencies": {
-    "astro": "7.4.10",
+    "astro": "7.4.13",
     "sharp": "0.35.5"
   },
   "devDependencies": {
