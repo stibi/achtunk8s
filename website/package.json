@@ -15,10 +15,10 @@
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
-    "@astrojs/sitemap": "3.7.4",
-    "html-validate": "11.21.0",
+    "@astrojs/sitemap": "3.7.6",
+    "html-validate": "11.21.1",
     "linkinator": "8.1.0",
     "typescript": "6.0.3",
-    "wrangler": "4.160.1"
+    "wrangler": "4.166.0"
   }
 }
